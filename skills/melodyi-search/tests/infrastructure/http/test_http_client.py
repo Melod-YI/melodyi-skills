@@ -20,14 +20,12 @@ class TestHttpClient:
         )
         assert client.default_headers["Authorization"] == "Bearer test"
 
-    @pytest.mark.asyncio
-    async def test_context_manager(self):
+    def test_context_manager(self):
         """测试上下文管理器"""
-        async with HttpClient(timeout_ms=5000) as client:
+        with HttpClient(timeout_ms=5000) as client:
             assert client is not None
 
-    @pytest.mark.asyncio
-    async def test_close_client(self):
+    def test_close_client(self):
         """测试关闭客户端"""
         client = HttpClient(timeout_ms=5000)
-        await client.close()
+        client.close()
