@@ -9,6 +9,7 @@ from melodyi_search.providers.minimax_cn_provider import MiniMaxCNProvider
 from melodyi_search.providers.tavily_provider import TavilyProvider
 from melodyi_search.providers.brave_provider import BraveProvider
 from melodyi_search.providers.exa_provider import ExaProvider
+from melodyi_search.providers.searxng_provider import SearXNGProvider
 
 __all__ = [
     "BaseProvider",
@@ -18,4 +19,5 @@ __all__ = [
     "TavilyProvider",
     "BraveProvider",
     "ExaProvider",
+    "SearXNGProvider",
 ]

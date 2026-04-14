@@ -7,6 +7,7 @@ from melodyi_search.providers.minimax_cn_provider import MiniMaxCNProvider
 from melodyi_search.providers.tavily_provider import TavilyProvider
 from melodyi_search.providers.brave_provider import BraveProvider
 from melodyi_search.providers.exa_provider import ExaProvider
+from melodyi_search.providers.searxng_provider import SearXNGProvider
 
 
 class TestProviderFactory:
@@ -119,6 +120,35 @@ class TestProviderFactory:
         assert provider.timeout_ms == 15000
         assert provider.default_type == "auto"
 
+    def test_create_searxng_provider(self):
+        """测试创建 SearXNG 提供商"""
+        config = ProviderConfig(
+            name="searxng",
+            host="http://localhost:8888",
+            timeout_ms=10000,
+            max_results=15,
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, SearXNGProvider)
+        assert provider.host == "http://localhost:8888"
+        assert provider.timeout_ms == 10000
+        assert provider.max_results == 15
+
+    def test_create_searxng_with_api_key(self):
+        """测试创建 SearXNG 提供商并指定 API key"""
+        config = ProviderConfig(
+            name="searxng",
+            host="http://localhost:8888",
+            api_key="searxng-key",
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, SearXNGProvider)
+        assert provider.api_key == "searxng-key"
+
     def test_create_exa_with_type(self):
         """测试创建 Exa 提供商并指定搜索类型（使用 type 参数）"""
         config = ProviderConfig(
@@ -170,12 +200,12 @@ class TestProviderFactory:
     def test_create_unsupported_provider(self):
         """测试创建不支持（但配置允许）的提供商抛出 ValueError
 
-        ProviderConfig 支持 searxng 和 firecrawl，但 ProviderFactory 当前不实现。
+        ProviderConfig 支持 searxng 和 firecrawl，但 ProviderFactory 当前不实现 firecrawl。
         """
         config = ProviderConfig(
-            name="searxng",
+            name="firecrawl",
             api_key="test-key",
-            host="https://searx.example.com",
+            host="https://firecrawl.example.com",
         )
 
         with pytest.raises(ValueError, match="不支持的提供商"):
@@ -199,7 +229,8 @@ class TestProviderFactory:
         assert "tavily" in providers
         assert "brave" in providers
         assert "exa" in providers
-        assert len(providers) == 4
+        assert "searxng" in providers
+        assert len(providers) == 5
 
     def test_create_with_default_values(self):
         """测试使用默认值创建提供商"""
@@ -257,3 +288,10 @@ class TestProviderFactory:
         provider = ProviderFactory.create(config)
 
         assert provider.name == "exa"
+
+    def test_create_searxng_provider_name(self):
+        """测试 SearXNG 提供商的 name 属性"""
+        config = ProviderConfig(name="searxng", host="http://localhost:8888")
+        provider = ProviderFactory.create(config)
+
+        assert provider.name == "searxng"

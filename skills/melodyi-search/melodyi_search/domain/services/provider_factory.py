@@ -10,6 +10,7 @@ from melodyi_search.providers.minimax_cn_provider import MiniMaxCNProvider
 from melodyi_search.providers.tavily_provider import TavilyProvider
 from melodyi_search.providers.brave_provider import BraveProvider
 from melodyi_search.providers.exa_provider import ExaProvider
+from melodyi_search.providers.searxng_provider import SearXNGProvider
 
 
 class ProviderFactory:
@@ -20,6 +21,7 @@ class ProviderFactory:
     - tavily: Tavily 提供商
     - brave: Brave 提供商
     - exa: Exa 提供商
+    - searxng: SearXNG 提供商
     """
 
     # 提供商名称到类的映射
@@ -28,6 +30,7 @@ class ProviderFactory:
         "tavily": TavilyProvider,
         "brave": BraveProvider,
         "exa": ExaProvider,
+        "searxng": SearXNGProvider,
     }
 
     @classmethod
@@ -60,6 +63,8 @@ class ProviderFactory:
             return cls._create_brave(config, extra_params)
         elif provider_name == "exa":
             return cls._create_exa(config, extra_params)
+        elif provider_name == "searxng":
+            return cls._create_searxng(config, extra_params)
         else:
             # This should never happen due to the check above
             raise ValueError(f"不支持的提供商: {provider_name}")
@@ -171,4 +176,24 @@ class ProviderFactory:
             api_url=config.host,
             timeout_ms=config.timeout_ms,
             search_type=search_type,
+        )
+
+    @classmethod
+    def _create_searxng(
+        cls, config: ProviderConfig, extra_params: dict
+    ) -> SearXNGProvider:
+        """创建 SearXNG 提供商
+
+        Args:
+            config: 提供商配置
+            extra_params: 额外参数
+
+        Returns:
+            SearXNGProvider 实例
+        """
+        return SearXNGProvider(
+            host=config.host or "http://localhost:8888",
+            timeout_ms=config.timeout_ms,
+            max_results=config.max_results,
+            api_key=config.api_key,
         )
