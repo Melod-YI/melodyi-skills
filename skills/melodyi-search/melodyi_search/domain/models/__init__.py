@@ -3,6 +3,7 @@
 from melodyi_search.domain.models.search_request import TimeRange, UnifiedSearchRequest
 from melodyi_search.domain.models.search_result import SearchResultItem, UnifiedSearchResult, SearchError
 from melodyi_search.domain.models.error import ErrorType, ERROR_GUIDANCE, create_error_with_guidance
+from melodyi_search.domain.models.provider_config import ProviderConfig, PROVIDER_NAMES
 
 __all__ = [
     "TimeRange",
@@ -13,4 +14,6 @@ __all__ = [
     "ErrorType",
     "ERROR_GUIDANCE",
     "create_error_with_guidance",
+    "ProviderConfig",
+    "PROVIDER_NAMES",
 ]
