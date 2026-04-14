@@ -1,4 +1,11 @@
-"""MiniMax-CN 提供商单元测试"""
+"""MiniMax-CN 提供商单元测试
+
+基于 MiniMax Coding Plan Search API 规范：
+- URL: https://api.minimaxi.com/v1/coding_plan/search
+- 方法: POST
+- 请求体: {"q": query}
+- 响应: {"organic": [...], "base_resp": {...}}
+"""
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
@@ -33,10 +40,10 @@ class TestMiniMaxCNProviderInit:
         provider = MiniMaxCNProvider(api_key="test-key", timeout_ms=5000)
         assert provider.timeout_ms == 5000
 
-    def test_init_with_custom_model(self):
-        """测试自定义模型"""
-        provider = MiniMaxCNProvider(api_key="test-key", model="custom-model")
-        assert provider.model == "custom-model"
+    def test_init_with_custom_max_results(self):
+        """测试自定义最大结果数"""
+        provider = MiniMaxCNProvider(api_key="test-key", max_results=20)
+        assert provider.max_results == 20
 
 
 class TestMiniMaxCNProviderProperties:
@@ -177,100 +184,139 @@ class TestDomainFilter:
         assert result is True
 
 
-class TestExtractSearchItems:
-    """搜索结果提取测试"""
+class TestParseResponse:
+    """响应解析测试 - 基于 coding_plan/search API 格式"""
 
-    def test_extract_markdown_links(self):
-        """测试提取 Markdown 链接"""
+    def test_parse_response_success(self):
+        """测试解析成功响应"""
         provider = MiniMaxCNProvider(api_key="test")
-        content = "这是一个[Python教程](https://example.com/python)和[Java教程](https://example.com/java)"
-        results = provider._extract_search_items(content)
+        response = {
+            "organic": [
+                {
+                    "title": "Python教程",
+                    "link": "https://python.org/docs",
+                    "snippet": "Python 官方教程",
+                    "date": "2026-04-14 10:00:00"
+                },
+                {
+                    "title": "菜鸟教程",
+                    "link": "https://runoob.com/python",
+                    "snippet": "Python 基础教程",
+                    "date": "2026-04-13 15:00:00"
+                }
+            ],
+            "base_resp": {
+                "status_code": 0,
+                "status_msg": "success"
+            }
+        }
+        results = provider._parse_response(response)
 
         assert len(results) == 2
         assert results[0].title == "Python教程"
-        assert results[0].url == "https://example.com/python"
-        assert results[1].title == "Java教程"
-        assert results[1].url == "https://example.com/java"
+        assert results[0].url == "https://python.org/docs"
+        assert results[0].description == "Python 官方教程"
 
-    def test_extract_plain_urls(self):
-        """测试提取纯文本 URL"""
+    def test_parse_response_with_error_status(self):
+        """测试解析错误状态响应"""
         provider = MiniMaxCNProvider(api_key="test")
-        content = "访问 https://example.com/docs 获取更多信息"
-        results = provider._extract_search_items(content)
-
-        assert len(results) == 1
-        assert results[0].url == "https://example.com/docs"
-
-    def test_extract_mixed_content(self):
-        """测试提取混合内容"""
-        provider = MiniMaxCNProvider(api_key="test")
-        content = """
-        推荐资源：
-        1. [Python官方文档](https://docs.python.org/3/)
-        2. https://www.python.org/
-        3. [教程](https://tutorial.python.org/)
-        """
-        results = provider._extract_search_items(content)
-
-        # 至少提取到两个结果
-        assert len(results) >= 2
-        urls = [r.url for r in results]
-        assert "https://docs.python.org/3/" in urls
-
-    def test_extract_empty_content(self):
-        """测试空内容"""
-        provider = MiniMaxCNProvider(api_key="test")
-        results = provider._extract_search_items("")
+        response = {
+            "organic": [],
+            "base_resp": {
+                "status_code": 1,
+                "status_msg": "error"
+            }
+        }
+        results = provider._parse_response(response)
         assert results == []
 
-
-class TestExtractContent:
-    """响应内容提取测试"""
-
-    def test_extract_content_openai_format(self):
-        """测试 OpenAI 格式响应"""
+    def test_parse_response_empty_organic(self):
+        """测试解析空 organic"""
         provider = MiniMaxCNProvider(api_key="test")
         response = {
-            "choices": [
-                {
-                    "message": {
-                        "content": "这是响应内容"
-                    }
-                }
-            ]
+            "organic": [],
+            "base_resp": {
+                "status_code": 0,
+                "status_msg": "success"
+            }
         }
-        content = provider._extract_content(response)
-        assert content == "这是响应内容"
+        results = provider._parse_response(response)
+        assert results == []
 
-    def test_extract_content_minimax_format(self):
-        """测试 MiniMax 格式响应"""
+    def test_parse_response_with_domain_filter(self):
+        """测试解析响应并应用域名过滤"""
         provider = MiniMaxCNProvider(api_key="test")
         response = {
-            "choices": [
+            "organic": [
                 {
-                    "messages": [
-                        {"role": "user", "content": "问题"},
-                        {"role": "assistant", "content": "这是响应内容"}
-                    ]
+                    "title": "Python",
+                    "link": "https://allowed.com/python",
+                    "snippet": "desc",
+                    "date": ""
+                },
+                {
+                    "title": "其他",
+                    "link": "https://blocked.com/other",
+                    "snippet": "desc",
+                    "date": ""
                 }
-            ]
+            ],
+            "base_resp": {"status_code": 0, "status_msg": "success"}
         }
-        content = provider._extract_content(response)
-        assert content == "这是响应内容"
+        results = provider._parse_response(
+            response,
+            include_domains=["allowed.com"]
+        )
 
-    def test_extract_content_empty_choices(self):
-        """测试空 choices"""
-        provider = MiniMaxCNProvider(api_key="test")
-        response = {"choices": []}
-        content = provider._extract_content(response)
-        assert content == ""
+        assert len(results) == 1
+        assert "allowed.com" in results[0].url
 
-    def test_extract_content_no_choices(self):
-        """测试无 choices 字段"""
+    def test_parse_response_max_results(self):
+        """测试结果数量限制"""
+        provider = MiniMaxCNProvider(api_key="test", max_results=2)
+        response = {
+            "organic": [
+                {"title": "A", "link": "https://a.com", "snippet": "", "date": ""},
+                {"title": "B", "link": "https://b.com", "snippet": "", "date": ""},
+                {"title": "C", "link": "https://c.com", "snippet": "", "date": ""},
+            ],
+            "base_resp": {"status_code": 0, "status_msg": "success"}
+        }
+        results = provider._parse_response(response)
+        assert len(results) == 2
+
+    def test_parse_response_with_date(self):
+        """测试解析带日期的结果"""
         provider = MiniMaxCNProvider(api_key="test")
-        response = {}
-        content = provider._extract_content(response)
-        assert content == ""
+        response = {
+            "organic": [
+                {
+                    "title": "标题",
+                    "link": "https://example.com",
+                    "snippet": "描述",
+                    "date": "2026-04-14 10:00:00"
+                }
+            ],
+            "base_resp": {"status_code": 0, "status_msg": "success"}
+        }
+        results = provider._parse_response(response)
+
+        assert len(results) == 1
+        assert results[0].published_date is not None
+        assert results[0].published_date.year == 2026
+
+    def test_parse_response_missing_link(self):
+        """测试解析缺少 link 的结果"""
+        provider = MiniMaxCNProvider(api_key="test")
+        response = {
+            "organic": [
+                {"title": "无链接", "snippet": "描述", "date": ""}
+            ],
+            "base_resp": {"status_code": 0, "status_msg": "success"}
+        }
+        results = provider._parse_response(response)
+        # 缺少链接的结果应被跳过
+        assert len(results) == 0
 
 
 class TestSearch:
@@ -279,18 +325,19 @@ class TestSearch:
     @patch("melodyi_search.providers.minimax_cn_provider.HttpClient")
     def test_search_success(self, mock_http_client_class):
         """测试成功搜索"""
-        # 设置 mock
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "choices": [
+            "organic": [
                 {
-                    "message": {
-                        "content": "推荐：[Python官网](https://www.python.org/)"
-                    }
+                    "title": "Python教程",
+                    "link": "https://python.org/docs",
+                    "snippet": "Python 官方教程",
+                    "date": "2026-04-14 10:00:00"
                 }
-            ]
+            ],
+            "base_resp": {"status_code": 0, "status_msg": "success"}
         }
         mock_client.post.return_value = mock_response
         mock_client.__enter__ = Mock(return_value=mock_client)
@@ -303,15 +350,44 @@ class TestSearch:
 
         assert result.provider == "minimax-cn"
         assert result.error is None
-        assert len(result.results) >= 1
+        assert len(result.results) == 1
+        assert result.results[0].title == "Python教程"
 
     @patch("melodyi_search.providers.minimax_cn_provider.HttpClient")
-    def test_search_with_error(self, mock_http_client_class):
-        """测试搜索错误"""
+    def test_search_with_error_status(self, mock_http_client_class):
+        """测试搜索错误状态"""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "organic": [],
+            "base_resp": {
+                "status_code": 1,
+                "status_msg": "API 错误"
+            }
+        }
+        mock_client.post.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_http_client_class.return_value = mock_client
+
+        provider = MiniMaxCNProvider(api_key="test-key")
+        request = ProviderSearchRequest(query="Python")
+        result = provider.search(request)
+
+        assert result.provider == "minimax-cn"
+        assert result.error is None  # base_resp 错误不触发 error，只是结果为空
+        assert len(result.results) == 0
+
+    @patch("melodyi_search.providers.minimax_cn_provider.HttpClient")
+    def test_search_with_http_error(self, mock_http_client_class):
+        """测试 HTTP 错误"""
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.status_code = 401
-        mock_response.json.return_value = {"error": "Unauthorized"}
+        mock_response.json.return_value = {
+            "base_resp": {"status_code": 401, "status_msg": "Unauthorized"}
+        }
         mock_client.post.return_value = mock_response
         mock_client.__enter__ = Mock(return_value=mock_client)
         mock_client.__exit__ = Mock(return_value=False)
@@ -332,7 +408,8 @@ class TestSearch:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "choices": [{"message": {"content": "结果"}}]
+            "organic": [{"title": "结果", "link": "https://example.com", "snippet": "", "date": ""}],
+            "base_resp": {"status_code": 0, "status_msg": "success"}
         }
         mock_client.post.return_value = mock_response
         mock_client.__enter__ = Mock(return_value=mock_client)
@@ -346,10 +423,11 @@ class TestSearch:
         )
         result = provider.search(request)
 
-        # 验证时间关键词被注入
+        # 验证时间关键词被注入到查询中
         call_args = mock_client.post.call_args
         payload = call_args.kwargs["json"]
-        assert "今天" in payload["messages"][0]["content"]
+        assert "今天" in payload["q"]
+        assert "最新" in payload["q"]
 
     @patch("melodyi_search.providers.minimax_cn_provider.HttpClient")
     def test_search_with_domain_filter(self, mock_http_client_class):
@@ -358,13 +436,11 @@ class TestSearch:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "content": "推荐：[Python](https://python.org/) 和 [其他](https://other.com/)"
-                    }
-                }
-            ]
+            "organic": [
+                {"title": "Python", "link": "https://python.org/docs", "snippet": "", "date": ""},
+                {"title": "其他", "link": "https://other.com/page", "snippet": "", "date": ""}
+            ],
+            "base_resp": {"status_code": 0, "status_msg": "success"}
         }
         mock_client.post.return_value = mock_response
         mock_client.__enter__ = Mock(return_value=mock_client)
@@ -379,8 +455,8 @@ class TestSearch:
         result = provider.search(request)
 
         # 只应包含 python.org 的结果
-        for item in result.results:
-            assert "python.org" in item.url
+        assert len(result.results) == 1
+        assert "python.org" in result.results[0].url
 
     @patch("melodyi_search.providers.minimax_cn_provider.HttpClient")
     def test_search_exception(self, mock_http_client_class):
@@ -399,56 +475,34 @@ class TestSearch:
         assert result.error == "网络错误"
         assert result.results == []
 
-
-class TestParseResponse:
-    """响应解析测试"""
-
-    def test_parse_response_with_results(self):
-        """测试解析带结果的响应"""
-        provider = MiniMaxCNProvider(api_key="test")
-        response = {
-            "choices": [
-                {
-                    "message": {
-                        "content": "搜索结果：[Python](https://python.org/)"
-                    }
-                }
-            ]
+    @patch("melodyi_search.providers.minimax_cn_provider.HttpClient")
+    def test_search_correct_endpoint(self, mock_http_client_class):
+        """测试调用正确的 API endpoint"""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "organic": [],
+            "base_resp": {"status_code": 0, "status_msg": "success"}
         }
-        results = provider._parse_response(response)
-        assert len(results) >= 1
+        mock_client.post.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_http_client_class.return_value = mock_client
 
-    def test_parse_response_with_domain_filter(self):
-        """测试解析响应并应用域名过滤"""
-        provider = MiniMaxCNProvider(api_key="test")
-        response = {
-            "choices": [
-                {
-                    "message": {
-                        "content": "[A](https://allowed.com/) [B](https://blocked.com/)"
-                    }
-                }
-            ]
-        }
-        results = provider._parse_response(
-            response,
-            include_domains=["allowed.com"]
-        )
+        provider = MiniMaxCNProvider(api_key="test-key")
+        request = ProviderSearchRequest(query="Python")
+        result = provider.search(request)
 
-        assert len(results) == 1
-        assert "allowed.com" in results[0].url
+        # 验证调用了正确的 endpoint
+        call_args = mock_client.post.call_args
+        url = call_args.args[0]
+        assert url == "https://api.minimaxi.com/v1/coding_plan/search"
 
-    def test_parse_response_max_results(self):
-        """测试结果数量限制"""
-        provider = MiniMaxCNProvider(api_key="test", max_results=2)
-        response = {
-            "choices": [
-                {
-                    "message": {
-                        "content": "[1](https://a.com/) [2](https://b.com/) [3](https://c.com/)"
-                    }
-                }
-            ]
-        }
-        results = provider._parse_response(response)
-        assert len(results) <= 2
+        # 验证请求体格式正确
+        payload = call_args.kwargs["json"]
+        assert "q" in payload
+        assert payload["q"] == "Python"
+        # 不应包含 model 参数
+        assert "model" not in payload
+        assert "messages" not in payload

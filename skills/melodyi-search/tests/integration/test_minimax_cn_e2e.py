@@ -142,19 +142,10 @@ class TestMiniMaxCNProviderConfig:
         )
         assert provider.api_host == "https://custom.api.com"
 
-    def test_custom_model(self):
-        """测试自定义模型"""
-        provider = MiniMaxCNProvider(
-            api_key=MINIMAX_API_KEY,
-            model="custom-model"
-        )
-        assert provider.model == "custom-model"
-
     def test_default_values(self):
         """测试默认值"""
         provider = MiniMaxCNProvider(api_key=MINIMAX_API_KEY)
 
         assert provider.api_host == "https://api.minimaxi.com"
-        assert provider.model == "abab6.5s-chat"
         assert provider.timeout_ms == 10000
         assert provider.max_results == 10

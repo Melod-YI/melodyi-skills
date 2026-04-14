@@ -32,19 +32,6 @@ class TestProviderFactory:
         assert provider.timeout_ms == 5000
         assert provider.max_results == 5
 
-    def test_create_minimax_cn_with_model(self):
-        """测试创建 MiniMax-CN 提供商并指定模型"""
-        config = ProviderConfig(
-            name="minimax-cn",
-            api_key="test-api-key",
-            extra_params={"model": "abab6.5-chat"},
-        )
-
-        provider = ProviderFactory.create(config)
-
-        assert isinstance(provider, MiniMaxCNProvider)
-        assert provider.model == "abab6.5-chat"
-
     def test_create_tavily_provider(self):
         """测试创建 Tavily 提供商"""
         config = ProviderConfig(

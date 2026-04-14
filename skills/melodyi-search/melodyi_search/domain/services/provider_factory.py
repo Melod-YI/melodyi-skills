@@ -107,9 +107,11 @@ class ProviderFactory:
     ) -> MiniMaxCNProvider:
         """创建 MiniMax-CN 提供商
 
+        MiniMax Coding Plan Search API 不需要 model 参数。
+
         Args:
             config: 提供商配置
-            extra_params: 额外参数
+            extra_params: 额外参数（忽略）
 
         Returns:
             MiniMaxCNProvider 实例
@@ -119,7 +121,6 @@ class ProviderFactory:
             api_host=config.host,
             timeout_ms=config.timeout_ms,
             max_results=config.max_results,
-            model=extra_params.get("model"),
         )
 
     @classmethod
