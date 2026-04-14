@@ -3,7 +3,7 @@
 Brave Search API 是一个注重隐私的搜索引擎 API。
 支持：
 - 原生时间过滤 (freshness: pd/pw/pm/py)
-- 域名过滤通过 site: 操作符实现（非原生）
+- 不支持域名过滤（site: 操作符不可靠，不实现）
 
 API 文档: https://brave.com/search/api/
 """
@@ -25,7 +25,7 @@ class BraveProvider(BaseProvider):
     """Brave 提供商
 
     使用 Brave Search API 进行网络搜索。
-    支持原生时间过滤，域名过滤通过 site: 操作符注入实现。
+    支持原生时间过滤，不支持域名过滤。
     """
 
     DEFAULT_API_URL = "https://api.search.brave.com/res/v1/web/search"
@@ -62,7 +62,8 @@ class BraveProvider(BaseProvider):
     def supports_domain_filter(self) -> bool:
         """是否支持原生域名过滤
 
-        Brave 不支持原生域名过滤，通过 site: 操作符实现。
+        Brave 不支持域名过滤。
+        site: 操作符不可靠，搜索引擎不保证遵守，因此不实现。
         """
         return False
 
@@ -76,6 +77,9 @@ class BraveProvider(BaseProvider):
     def search(self, request: ProviderSearchRequest) -> ProviderSearchResult:
         """执行搜索（同步版本）
 
+        注意：include_domains 和 exclude_domains 参数被忽略，
+        因为 Brave 不支持可靠的域名过滤。
+
         Args:
             request: 搜索请求
 
@@ -84,12 +88,8 @@ class BraveProvider(BaseProvider):
         """
         start_time = time.time()
 
-        # 处理查询（注入域名操作符）
-        query = self._inject_domain_operators(
-            request.query,
-            request.include_domains,
-            request.exclude_domains,
-        )
+        # Brave 不支持域名过滤，直接使用原始查询
+        query = request.query
 
         # 构建请求参数
         params = self._build_request_params(query, request)
@@ -148,7 +148,7 @@ class BraveProvider(BaseProvider):
         """构建请求参数
 
         Args:
-            query: 搜索查询（已注入域名操作符）
+            query: 搜索查询
             request: 原始搜索请求
 
         Returns:
@@ -183,42 +183,6 @@ class BraveProvider(BaseProvider):
             "year": "py",
         }
         return freshness_mapping.get(range_type)
-
-    def _inject_domain_operators(
-        self,
-        query: str,
-        include_domains: Optional[List[str]] = None,
-        exclude_domains: Optional[List[str]] = None,
-    ) -> str:
-        """在查询中注入 site: 操作符
-
-        由于 Brave 不支持原生域名过滤，通过 site: 和 -site: 操作符实现。
-
-        Args:
-            query: 原始查询
-            include_domains: 包含域名列表
-            exclude_domains: 排除域名列表
-
-        Returns:
-            注入操作符后的查询
-        """
-        modifiers = []
-
-        # 添加 site: 操作符（包含域名）
-        if include_domains:
-            for domain in include_domains:
-                modifiers.append(f"site:{domain}")
-
-        # 添加 -site: 操作符（排除域名）
-        if exclude_domains:
-            for domain in exclude_domains:
-                modifiers.append(f"-site:{domain}")
-
-        # 组合查询
-        if modifiers:
-            return f"{query} {' '.join(modifiers)}"
-
-        return query
 
     def _parse_response(self, response: dict) -> List[SearchResultItem]:
         """解析 API 响应

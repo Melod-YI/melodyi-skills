@@ -3,6 +3,8 @@
 这些测试需要真实的 API 密钥才能运行。
 在没有 API 密钥的情况下会被跳过。
 
+注意：Brave 不支持域名过滤（site: 操作符不可靠），因此不测试域名过滤功能。
+
 运行方式:
     export BRAVE_API_KEY=your_api_key
     pytest tests/integration/test_brave_e2e.py -v
@@ -109,56 +111,6 @@ class TestBraveE2E:
         assert result.error is None
         print(f"\n时间范围（year）搜索响应时间: {result.response_time_ms}ms")
 
-    def test_search_with_include_domains(self, provider):
-        """测试包含域名过滤（site: 操作符）"""
-        request = ProviderSearchRequest(
-            query="Python tutorial",
-            include_domains=["python.org"],
-            max_results=5
-        )
-        result = provider.search(request)
-
-        assert result.provider == "brave"
-        assert result.error is None
-        print(f"\n包含域名过滤结果数量: {len(result.results)}")
-
-        # 注意：site: 操作符是注入到查询中的，结果可能不完全来自指定域名
-        # 这取决于 Brave 对 site: 操作符的处理
-        for item in result.results:
-            print(f"  - {item.url}")
-
-    def test_search_with_exclude_domains(self, provider):
-        """测试排除域名过滤（-site: 操作符）"""
-        request = ProviderSearchRequest(
-            query="programming tutorials",
-            exclude_domains=["pinterest.com", "quora.com"],
-            max_results=10
-        )
-        result = provider.search(request)
-
-        assert result.provider == "brave"
-        assert result.error is None
-        print(f"\n排除域名过滤结果数量: {len(result.results)}")
-
-        # 验证结果中不包含被排除的域名
-        for item in result.results:
-            assert "pinterest.com" not in item.url.lower()
-            assert "quora.com" not in item.url.lower()
-
-    def test_search_with_combined_domains(self, provider):
-        """测试组合域名过滤"""
-        request = ProviderSearchRequest(
-            query="Python documentation",
-            include_domains=["docs.python.org", "python.org"],
-            exclude_domains=["forum.python.org"],
-            max_results=5
-        )
-        result = provider.search(request)
-
-        assert result.provider == "brave"
-        assert result.error is None
-        print(f"\n组合域名过滤结果数量: {len(result.results)}")
-
     def test_search_response_time(self, provider):
         """测试响应时间在合理范围内"""
         request = ProviderSearchRequest(
@@ -220,7 +172,10 @@ class TestBraveProviderConfig:
         assert provider.timeout_ms == 10000
 
     def test_provider_capabilities(self):
-        """测试提供商能力"""
+        """测试提供商能力
+
+        Brave 支持时间过滤，不支持域名过滤。
+        """
         provider = BraveProvider(api_key=BRAVE_API_KEY)
 
         assert provider.supports_time_filter() is True

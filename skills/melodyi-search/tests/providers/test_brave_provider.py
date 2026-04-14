@@ -1,4 +1,7 @@
-"""Brave 提供商单元测试"""
+"""Brave 提供商单元测试
+
+注意：Brave 不支持域名过滤，site: 操作符不可靠，因此不测试域名过滤功能。
+"""
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
@@ -47,7 +50,10 @@ class TestBraveProviderProperties:
         assert provider.supports_time_filter() is True
 
     def test_supports_domain_filter(self):
-        """测试不支持原生域名过滤"""
+        """测试不支持域名过滤
+
+        Brave 不支持域名过滤，site: 操作符不可靠，搜索引擎不保证遵守。
+        """
         provider = BraveProvider(api_key="test")
         assert provider.supports_domain_filter() is False
 
@@ -89,66 +95,6 @@ class TestBuildFreshness:
         provider = BraveProvider(api_key="test")
         freshness = provider._build_freshness("unknown")
         assert freshness is None
-
-
-class TestInjectDomainOperators:
-    """域名操作符注入测试"""
-
-    def test_inject_domain_operators_no_filter(self):
-        """测试无过滤条件"""
-        provider = BraveProvider(api_key="test")
-        query = provider._inject_domain_operators("Python教程", None, None)
-        assert query == "Python教程"
-
-    def test_inject_domain_operators_include_single(self):
-        """测试包含单个域名"""
-        provider = BraveProvider(api_key="test")
-        query = provider._inject_domain_operators(
-            "Python教程",
-            ["python.org"],
-            None
-        )
-        assert query == "Python教程 site:python.org"
-
-    def test_inject_domain_operators_include_multiple(self):
-        """测试包含多个域名"""
-        provider = BraveProvider(api_key="test")
-        query = provider._inject_domain_operators(
-            "Python教程",
-            ["python.org", "github.com"],
-            None
-        )
-        assert query == "Python教程 site:python.org site:github.com"
-
-    def test_inject_domain_operators_exclude_single(self):
-        """测试排除单个域名"""
-        provider = BraveProvider(api_key="test")
-        query = provider._inject_domain_operators(
-            "Python教程",
-            None,
-            ["pinterest.com"]
-        )
-        assert query == "Python教程 -site:pinterest.com"
-
-    def test_inject_domain_operators_exclude_multiple(self):
-        """测试排除多个域名"""
-        provider = BraveProvider(api_key="test")
-        query = provider._inject_domain_operators(
-            "Python教程",
-            None,
-            ["pinterest.com", "quora.com"]
-        )
-        assert query == "Python教程 -site:pinterest.com -site:quora.com"
-
-    def test_inject_domain_operators_combined(self):
-        """测试包含和排除组合"""
-        provider = BraveProvider(api_key="test")
-        query = provider._inject_domain_operators(
-            "Python教程",
-            ["python.org"],
-            ["pinterest.com"]
-        )
-        assert query == "Python教程 site:python.org -site:pinterest.com"
 
 
 class TestBuildRequestParams:
@@ -331,7 +277,6 @@ class TestSearch:
     @patch("melodyi_search.providers.brave_provider.HttpClient")
     def test_search_success(self, mock_http_client_class):
         """测试成功搜索"""
-        # 设置 mock
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -405,76 +350,11 @@ class TestSearch:
         assert params["freshness"] == "pd"
 
     @patch("melodyi_search.providers.brave_provider.HttpClient")
-    def test_search_with_include_domains(self, mock_http_client_class):
-        """测试带包含域名的搜索"""
-        mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "web": {
-                "results": [
-                    {
-                        "title": "Python",
-                        "url": "https://python.org/",
-                        "description": "Python"
-                    }
-                ]
-            }
-        }
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
-        mock_http_client_class.return_value = mock_client
+    def test_search_domain_params_ignored(self, mock_http_client_class):
+        """测试域名过滤参数被忽略
 
-        provider = BraveProvider(api_key="test-key")
-        request = ProviderSearchRequest(
-            query="Python",
-            include_domains=["python.org"]
-        )
-        result = provider.search(request)
-
-        # 验证 site: 操作符被注入
-        call_args = mock_client.get.call_args
-        params = call_args.kwargs["params"]
-        assert "site:python.org" in params["q"]
-
-    @patch("melodyi_search.providers.brave_provider.HttpClient")
-    def test_search_with_exclude_domains(self, mock_http_client_class):
-        """测试带排除域名的搜索"""
-        mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "web": {
-                "results": [
-                    {
-                        "title": "Python",
-                        "url": "https://python.org/",
-                        "description": "Python"
-                    }
-                ]
-            }
-        }
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
-        mock_http_client_class.return_value = mock_client
-
-        provider = BraveProvider(api_key="test-key")
-        request = ProviderSearchRequest(
-            query="Python",
-            exclude_domains=["pinterest.com"]
-        )
-        result = provider.search(request)
-
-        # 验证 -site: 操作符被注入
-        call_args = mock_client.get.call_args
-        params = call_args.kwargs["params"]
-        assert "-site:pinterest.com" in params["q"]
-
-    @patch("melodyi_search.providers.brave_provider.HttpClient")
-    def test_search_with_combined_domains(self, mock_http_client_class):
-        """测试组合域名过滤"""
+        Brave 不支持域名过滤，include_domains 和 exclude_domains 参数被忽略。
+        """
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -502,11 +382,12 @@ class TestSearch:
         )
         result = provider.search(request)
 
-        # 验证两种操作符都被注入
+        # 验证查询没有被修改（无 site: 操作符注入）
         call_args = mock_client.get.call_args
         params = call_args.kwargs["params"]
-        assert "site:python.org" in params["q"]
-        assert "-site:pinterest.com" in params["q"]
+        assert params["q"] == "Python"
+        assert "site:" not in params["q"]
+        assert "-site:" not in params["q"]
 
     @patch("melodyi_search.providers.brave_provider.HttpClient")
     def test_search_exception(self, mock_http_client_class):
