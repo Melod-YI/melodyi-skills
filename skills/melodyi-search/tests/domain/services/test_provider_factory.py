@@ -1,0 +1,259 @@
+"""ProviderFactory 单元测试"""
+
+import pytest
+from melodyi_search.domain.models.provider_config import ProviderConfig
+from melodyi_search.domain.services.provider_factory import ProviderFactory
+from melodyi_search.providers.minimax_cn_provider import MiniMaxCNProvider
+from melodyi_search.providers.tavily_provider import TavilyProvider
+from melodyi_search.providers.brave_provider import BraveProvider
+from melodyi_search.providers.exa_provider import ExaProvider
+
+
+class TestProviderFactory:
+    """ProviderFactory 测试类"""
+
+    def test_create_minimax_cn_provider(self):
+        """测试创建 MiniMax-CN 提供商"""
+        config = ProviderConfig(
+            name="minimax-cn",
+            api_key="test-api-key",
+            host="https://custom.api.minimaxi.com",
+            timeout_ms=5000,
+            max_results=5,
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, MiniMaxCNProvider)
+        assert provider.api_key == "test-api-key"
+        assert provider.api_host == "https://custom.api.minimaxi.com"
+        assert provider.timeout_ms == 5000
+        assert provider.max_results == 5
+
+    def test_create_minimax_cn_with_model(self):
+        """测试创建 MiniMax-CN 提供商并指定模型"""
+        config = ProviderConfig(
+            name="minimax-cn",
+            api_key="test-api-key",
+            extra_params={"model": "abab6.5-chat"},
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, MiniMaxCNProvider)
+        assert provider.model == "abab6.5-chat"
+
+    def test_create_tavily_provider(self):
+        """测试创建 Tavily 提供商"""
+        config = ProviderConfig(
+            name="tavily",
+            api_key="tvly-test-key",
+            host="https://custom.tavily.com/search",
+            timeout_ms=8000,
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, TavilyProvider)
+        assert provider.api_key == "tvly-test-key"
+        assert provider.api_url == "https://custom.tavily.com/search"
+        assert provider.timeout_ms == 8000
+        assert provider.default_depth == "basic"
+
+    def test_create_tavily_with_depth(self):
+        """测试创建 Tavily 提供商并指定搜索深度（使用 depth 参数）"""
+        config = ProviderConfig(
+            name="tavily",
+            api_key="tvly-test-key",
+            extra_params={"depth": "advanced"},
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, TavilyProvider)
+        assert provider.default_depth == "advanced"
+
+    def test_create_tavily_with_search_depth(self):
+        """测试创建 Tavily 提供商并指定搜索深度（使用 search_depth 参数）"""
+        config = ProviderConfig(
+            name="tavily",
+            api_key="tvly-test-key",
+            extra_params={"search_depth": "advanced"},
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, TavilyProvider)
+        assert provider.default_depth == "advanced"
+
+    def test_create_brave_provider(self):
+        """测试创建 Brave 提供商"""
+        config = ProviderConfig(
+            name="brave",
+            api_key="brave-test-key",
+            host="https://custom.brave.com/api",
+            timeout_ms=6000,
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, BraveProvider)
+        assert provider.api_key == "brave-test-key"
+        assert provider.api_url == "https://custom.brave.com/api"
+        assert provider.timeout_ms == 6000
+
+    def test_create_exa_provider(self):
+        """测试创建 Exa 提供商"""
+        config = ProviderConfig(
+            name="exa",
+            api_key="exa-test-key",
+            host="https://custom.exa.ai/search",
+            timeout_ms=15000,
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, ExaProvider)
+        assert provider.api_key == "exa-test-key"
+        assert provider.api_url == "https://custom.exa.ai/search"
+        assert provider.timeout_ms == 15000
+        assert provider.default_type == "auto"
+
+    def test_create_exa_with_type(self):
+        """测试创建 Exa 提供商并指定搜索类型（使用 type 参数）"""
+        config = ProviderConfig(
+            name="exa",
+            api_key="exa-test-key",
+            extra_params={"type": "neural"},
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, ExaProvider)
+        assert provider.default_type == "neural"
+
+    def test_create_exa_with_search_type(self):
+        """测试创建 Exa 提供商并指定搜索类型（使用 search_type 参数）"""
+        config = ProviderConfig(
+            name="exa",
+            api_key="exa-test-key",
+            extra_params={"search_type": "keyword"},
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, ExaProvider)
+        assert provider.default_type == "keyword"
+
+    def test_create_all_multiple_providers(self):
+        """测试创建多个提供商"""
+        configs = [
+            ProviderConfig(name="minimax-cn", api_key="key1"),
+            ProviderConfig(name="tavily", api_key="key2"),
+            ProviderConfig(name="brave", api_key="key3"),
+            ProviderConfig(name="exa", api_key="key4"),
+        ]
+
+        providers = ProviderFactory.create_all(configs)
+
+        assert len(providers) == 4
+        assert isinstance(providers[0], MiniMaxCNProvider)
+        assert isinstance(providers[1], TavilyProvider)
+        assert isinstance(providers[2], BraveProvider)
+        assert isinstance(providers[3], ExaProvider)
+
+    def test_create_all_empty_list(self):
+        """测试创建空提供商列表"""
+        providers = ProviderFactory.create_all([])
+        assert providers == []
+
+    def test_create_unsupported_provider(self):
+        """测试创建不支持（但配置允许）的提供商抛出 ValueError
+
+        ProviderConfig 支持 searxng 和 firecrawl，但 ProviderFactory 当前不实现。
+        """
+        config = ProviderConfig(
+            name="searxng",
+            api_key="test-key",
+            host="https://searx.example.com",
+        )
+
+        with pytest.raises(ValueError, match="不支持的提供商"):
+            ProviderFactory.create(config)
+
+    def test_create_all_with_unsupported_provider(self):
+        """测试 create_all 遇到不支持（但配置允许）的提供商抛出 ValueError"""
+        configs = [
+            ProviderConfig(name="minimax-cn", api_key="key1"),
+            ProviderConfig(name="firecrawl", api_key="key2", host="https://firecrawl.example.com"),
+        ]
+
+        with pytest.raises(ValueError, match="不支持的提供商"):
+            ProviderFactory.create_all(configs)
+
+    def test_get_supported_providers(self):
+        """测试获取支持的提供商列表"""
+        providers = ProviderFactory.get_supported_providers()
+
+        assert "minimax-cn" in providers
+        assert "tavily" in providers
+        assert "brave" in providers
+        assert "exa" in providers
+        assert len(providers) == 4
+
+    def test_create_with_default_values(self):
+        """测试使用默认值创建提供商"""
+        config = ProviderConfig(
+            name="tavily",
+            api_key="test-key",
+            # 不指定 host, timeout_ms, max_results
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, TavilyProvider)
+        assert provider.api_key == "test-key"
+        assert provider.api_url == TavilyProvider.DEFAULT_API_URL
+        assert provider.timeout_ms == 10000  # ProviderConfig 默认值
+        assert provider.default_depth == "basic"  # Tavily 默认值
+
+    def test_create_with_none_extra_params(self):
+        """测试 extra_params 为 None 时的处理"""
+        config = ProviderConfig(
+            name="exa",
+            api_key="test-key",
+            extra_params=None,
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, ExaProvider)
+        assert provider.default_type == "auto"  # 使用默认值
+
+    def test_create_minimax_cn_provider_name(self):
+        """测试 MiniMax-CN 提供商的 name 属性"""
+        config = ProviderConfig(name="minimax-cn", api_key="test-key")
+        provider = ProviderFactory.create(config)
+
+        assert provider.name == "minimax-cn"
+
+    def test_create_tavily_provider_name(self):
+        """测试 Tavily 提供商的 name 属性"""
+        config = ProviderConfig(name="tavily", api_key="test-key")
+        provider = ProviderFactory.create(config)
+
+        assert provider.name == "tavily"
+
+    def test_create_brave_provider_name(self):
+        """测试 Brave 提供商的 name 属性"""
+        config = ProviderConfig(name="brave", api_key="test-key")
+        provider = ProviderFactory.create(config)
+
+        assert provider.name == "brave"
+
+    def test_create_exa_provider_name(self):
+        """测试 Exa 提供商的 name 属性"""
+        config = ProviderConfig(name="exa", api_key="test-key")
+        provider = ProviderFactory.create(config)
+
+        assert provider.name == "exa"
