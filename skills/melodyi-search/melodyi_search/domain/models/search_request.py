@@ -2,26 +2,27 @@
 
 from datetime import datetime
 from typing import Literal, Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field
 
 
 class TimeRange(BaseModel):
     """统一时间范围规范"""
 
     # 简单范围类型: day, week, month, year
-    range_type: Optional[Literal["day", "week", "month", "year"]] = None
+    range_type: Optional[Literal["day", "week", "month", "year"]] = Field(
+        default=None,
+        description="时间范围类型：day、week、month、year"
+    )
 
     # 精确日期范围
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-
-    @field_validator("range_type")
-    @classmethod
-    def validate_range_type(cls, v: Optional[str]) -> Optional[str]:
-        """验证 range_type 只能是允许的值"""
-        if v is not None and v not in ("day", "week", "month", "year"):
-            raise ValueError(f"无效的 range_type: {v}，必须是 day/week/month/year")
-        return v
+    start_date: Optional[datetime] = Field(
+        default=None,
+        description="起始日期（精确范围）"
+    )
+    end_date: Optional[datetime] = Field(
+        default=None,
+        description="结束日期（精确范围）"
+    )
 
     def is_empty(self) -> bool:
         """检查是否为空的时间范围"""

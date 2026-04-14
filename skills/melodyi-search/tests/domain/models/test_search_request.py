@@ -50,3 +50,25 @@ class TestTimeRange:
         """测试无效 range_type 抛出错误"""
         with pytest.raises(ValueError):
             TimeRange(range_type="invalid")
+
+    def test_is_empty_method(self):
+        """测试 is_empty() 方法"""
+        # 空范围
+        time_range = TimeRange()
+        assert time_range.is_empty() is True
+
+        # 有 range_type
+        time_range = TimeRange(range_type="day")
+        assert time_range.is_empty() is False
+
+        # 有 start_date
+        time_range = TimeRange(start_date=datetime(2026, 1, 1))
+        assert time_range.is_empty() is False
+
+        # 有 end_date
+        time_range = TimeRange(end_date=datetime(2026, 12, 31))
+        assert time_range.is_empty() is False
+
+        # 同时有 range_type 和日期
+        time_range = TimeRange(range_type="week", start_date=datetime(2026, 1, 1))
+        assert time_range.is_empty() is False
