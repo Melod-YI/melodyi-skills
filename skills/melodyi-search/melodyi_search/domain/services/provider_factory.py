@@ -11,6 +11,7 @@ from melodyi_search.providers.tavily_provider import TavilyProvider
 from melodyi_search.providers.brave_provider import BraveProvider
 from melodyi_search.providers.exa_provider import ExaProvider
 from melodyi_search.providers.searxng_provider import SearXNGProvider
+from melodyi_search.providers.firecrawl_provider import FirecrawlProvider
 
 
 class ProviderFactory:
@@ -22,6 +23,7 @@ class ProviderFactory:
     - brave: Brave 提供商
     - exa: Exa 提供商
     - searxng: SearXNG 提供商
+    - firecrawl: Firecrawl 提供商
     """
 
     # 提供商名称到类的映射
@@ -31,6 +33,7 @@ class ProviderFactory:
         "brave": BraveProvider,
         "exa": ExaProvider,
         "searxng": SearXNGProvider,
+        "firecrawl": FirecrawlProvider,
     }
 
     @classmethod
@@ -65,6 +68,8 @@ class ProviderFactory:
             return cls._create_exa(config, extra_params)
         elif provider_name == "searxng":
             return cls._create_searxng(config, extra_params)
+        elif provider_name == "firecrawl":
+            return cls._create_firecrawl(config, extra_params)
         else:
             # This should never happen due to the check above
             raise ValueError(f"不支持的提供商: {provider_name}")
@@ -196,4 +201,24 @@ class ProviderFactory:
             timeout_ms=config.timeout_ms,
             max_results=config.max_results,
             api_key=config.api_key,
+        )
+
+    @classmethod
+    def _create_firecrawl(
+        cls, config: ProviderConfig, extra_params: dict
+    ) -> FirecrawlProvider:
+        """创建 Firecrawl 提供商
+
+        Args:
+            config: 提供商配置
+            extra_params: 额外参数
+
+        Returns:
+            FirecrawlProvider 实例
+        """
+        return FirecrawlProvider(
+            api_key=config.api_key or "",
+            api_url=config.host,
+            timeout_ms=config.timeout_ms,
+            max_results=config.max_results,
         )

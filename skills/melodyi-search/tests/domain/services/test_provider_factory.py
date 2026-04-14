@@ -8,6 +8,7 @@ from melodyi_search.providers.tavily_provider import TavilyProvider
 from melodyi_search.providers.brave_provider import BraveProvider
 from melodyi_search.providers.exa_provider import ExaProvider
 from melodyi_search.providers.searxng_provider import SearXNGProvider
+from melodyi_search.providers.firecrawl_provider import FirecrawlProvider
 
 
 class TestProviderFactory:
@@ -197,29 +198,35 @@ class TestProviderFactory:
         providers = ProviderFactory.create_all([])
         assert providers == []
 
-    def test_create_unsupported_provider(self):
-        """测试创建不支持（但配置允许）的提供商抛出 ValueError
-
-        ProviderConfig 支持 searxng 和 firecrawl，但 ProviderFactory 当前不实现 firecrawl。
-        """
+    def test_create_firecrawl_provider(self):
+        """测试创建 Firecrawl 提供商"""
         config = ProviderConfig(
             name="firecrawl",
-            api_key="test-key",
-            host="https://firecrawl.example.com",
+            api_key="firecrawl-test-key",
+            host="https://firecrawl.example.com/v1/search",
+            timeout_ms=12000,
+            max_results=8,
         )
 
-        with pytest.raises(ValueError, match="不支持的提供商"):
-            ProviderFactory.create(config)
+        provider = ProviderFactory.create(config)
 
-    def test_create_all_with_unsupported_provider(self):
-        """测试 create_all 遇到不支持（但配置允许）的提供商抛出 ValueError"""
-        configs = [
-            ProviderConfig(name="minimax-cn", api_key="key1"),
-            ProviderConfig(name="firecrawl", api_key="key2", host="https://firecrawl.example.com"),
-        ]
+        assert isinstance(provider, FirecrawlProvider)
+        assert provider.api_key == "firecrawl-test-key"
+        assert provider.api_url == "https://firecrawl.example.com/v1/search"
+        assert provider.timeout_ms == 12000
+        assert provider.max_results == 8
 
-        with pytest.raises(ValueError, match="不支持的提供商"):
-            ProviderFactory.create_all(configs)
+    def test_create_firecrawl_provider_default_url(self):
+        """测试创建 Firecrawl 提供商使用默认 URL"""
+        config = ProviderConfig(
+            name="firecrawl",
+            api_key="firecrawl-test-key",
+        )
+
+        provider = ProviderFactory.create(config)
+
+        assert isinstance(provider, FirecrawlProvider)
+        assert provider.api_url == FirecrawlProvider.DEFAULT_API_URL
 
     def test_get_supported_providers(self):
         """测试获取支持的提供商列表"""
@@ -230,7 +237,8 @@ class TestProviderFactory:
         assert "brave" in providers
         assert "exa" in providers
         assert "searxng" in providers
-        assert len(providers) == 5
+        assert "firecrawl" in providers
+        assert len(providers) == 6
 
     def test_create_with_default_values(self):
         """测试使用默认值创建提供商"""
@@ -295,3 +303,10 @@ class TestProviderFactory:
         provider = ProviderFactory.create(config)
 
         assert provider.name == "searxng"
+
+    def test_create_firecrawl_provider_name(self):
+        """测试 Firecrawl 提供商的 name 属性"""
+        config = ProviderConfig(name="firecrawl", api_key="test-key")
+        provider = ProviderFactory.create(config)
+
+        assert provider.name == "firecrawl"
