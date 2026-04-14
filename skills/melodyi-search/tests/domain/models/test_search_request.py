@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import datetime, timedelta
-from melodyi_search.domain.models.search_request import TimeRange
+from melodyi_search.domain.models.search_request import TimeRange, UnifiedSearchRequest
 
 
 class TestTimeRange:
@@ -72,3 +72,56 @@ class TestTimeRange:
         # 同时有 range_type 和日期
         time_range = TimeRange(range_type="week", start_date=datetime(2026, 1, 1))
         assert time_range.is_empty() is False
+
+
+class TestUnifiedSearchRequest:
+    """UnifiedSearchRequest 测试类"""
+
+    def test_create_with_query_only(self):
+        """测试仅使用 query 创建"""
+        request = UnifiedSearchRequest(query="python tutorial")
+        assert request.query == "python tutorial"
+        assert request.max_results == 10  # 默认值
+        assert request.time_range is None
+        assert request.include_domains is None
+        assert request.exclude_domains is None
+        assert request.language is None
+        assert request.preferred_provider is None
+
+    def test_create_with_all_params(self):
+        """测试使用所有参数创建"""
+        time_range = TimeRange(range_type="week")
+        request = UnifiedSearchRequest(
+            query="AI news",
+            max_results=20,
+            time_range=time_range,
+            include_domains=["github.com", "stackoverflow.com"],
+            exclude_domains=["twitter.com"],
+            language="en",
+            preferred_provider="tavily"
+        )
+        assert request.query == "AI news"
+        assert request.max_results == 20
+        assert request.time_range.range_type == "week"
+        assert request.include_domains == ["github.com", "stackoverflow.com"]
+        assert request.exclude_domains == ["twitter.com"]
+        assert request.language == "en"
+        assert request.preferred_provider == "tavily"
+
+    def test_query_required(self):
+        """测试 query 必填"""
+        with pytest.raises(Exception):  # ValidationError
+            UnifiedSearchRequest()
+
+    def test_query_cannot_be_empty(self):
+        """测试 query 不能为空字符串"""
+        with pytest.raises(Exception):  # ValidationError
+            UnifiedSearchRequest(query="")
+
+    def test_max_results_at_least_one(self):
+        """测试 max_results 至少为 1"""
+        with pytest.raises(Exception):  # ValidationError
+            UnifiedSearchRequest(query="test", max_results=0)
+
+        with pytest.raises(Exception):  # ValidationError
+            UnifiedSearchRequest(query="test", max_results=-1)
