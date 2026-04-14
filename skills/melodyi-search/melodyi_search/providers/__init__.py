@@ -8,6 +8,7 @@ from melodyi_search.providers.base_provider import (
 from melodyi_search.providers.minimax_cn_provider import MiniMaxCNProvider
 from melodyi_search.providers.tavily_provider import TavilyProvider
 from melodyi_search.providers.brave_provider import BraveProvider
+from melodyi_search.providers.exa_provider import ExaProvider
 
 __all__ = [
     "BaseProvider",
@@ -16,4 +17,5 @@ __all__ = [
     "MiniMaxCNProvider",
     "TavilyProvider",
     "BraveProvider",
+    "ExaProvider",
 ]
