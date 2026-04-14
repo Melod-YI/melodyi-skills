@@ -1,6 +1,6 @@
 """领域模型"""
 
 from melodyi_search.domain.models.search_request import TimeRange, UnifiedSearchRequest
-from melodyi_search.domain.models.search_result import SearchResultItem
+from melodyi_search.domain.models.search_result import SearchResultItem, UnifiedSearchResult, SearchError
 
-__all__ = ["TimeRange", "UnifiedSearchRequest", "SearchResultItem"]
+__all__ = ["TimeRange", "UnifiedSearchRequest", "SearchResultItem", "UnifiedSearchResult", "SearchError"]
