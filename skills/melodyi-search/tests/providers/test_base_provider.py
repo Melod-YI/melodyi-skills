@@ -15,7 +15,7 @@ class MockProvider(BaseProvider):
     def name(self) -> str:
         return "mock"
 
-    async def search(self, request: ProviderSearchRequest) -> ProviderSearchResult:
+    def search(self, request: ProviderSearchRequest) -> ProviderSearchResult:
         return ProviderSearchResult(
             provider="mock",
             results=[],

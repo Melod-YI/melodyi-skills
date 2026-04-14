@@ -5,5 +5,11 @@ from melodyi_search.providers.base_provider import (
     ProviderSearchRequest,
     ProviderSearchResult,
 )
+from melodyi_search.providers.minimax_cn_provider import MiniMaxCNProvider
 
-__all__ = ["BaseProvider", "ProviderSearchRequest", "ProviderSearchResult"]
+__all__ = [
+    "BaseProvider",
+    "ProviderSearchRequest",
+    "ProviderSearchResult",
+    "MiniMaxCNProvider",
+]

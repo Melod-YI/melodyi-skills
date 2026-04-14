@@ -40,8 +40,8 @@ class BaseProvider(ABC):
         pass
 
     @abstractmethod
-    async def search(self, request: ProviderSearchRequest) -> ProviderSearchResult:
-        """执行搜索"""
+    def search(self, request: ProviderSearchRequest) -> ProviderSearchResult:
+        """执行搜索（同步版本）"""
         pass
 
     @abstractmethod
