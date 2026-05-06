@@ -20,15 +20,21 @@
 
 ## Phase 1: Database Infrastructure
 
-**Goal:** 建立 SQLite 持久化基础设施，为对比数据存储提供基础
+**Goal:** 建立 SQLite 久化基础设施，为对比数据存储提供基础
+
+**Plans:** 2 plans in 2 waves
+
+Plans:
+- [ ] 01-01-PLAN.md — 配置扩展与数据库管理器实现 (Wave 1)
+- [ ] 01-02-PLAN.md — 数据库管理器单元测试 (Wave 2, TDD)
 
 ### Requirements Mapped
 
-- DB-01: 创建 SQLite 数据库文件
-- DB-02: `comparison_sessions` 表
-- DB-03: `provider_results` 表
-- DB-04: `search_results` 表
-- DB-05: 数据库初始化脚本
+- DB-01: 创建 SQLite 数据库文件 (Plan 01)
+- DB-02: `comparison_sessions` 表 (Plan 01)
+- DB-03: `provider_results` 表 (Plan 01)
+- DB-04: `search_results` 表 (Plan 01)
+- DB-05: 数据库初始化脚本 (Plan 01, Plan 02)
 
 ### Success Criteria
 
@@ -73,7 +79,7 @@
 3. 修复 daemon thread：使用 `thread.join(timeout)` 或 asyncio
 4. 修改 `UnifiedSearchResult` 添加 `session_id` 字段
 5. 单元测试 `test_comparison_recorder.py`
-6. 集成测试验证完整流程
+6. 成测试验证完整流程
 
 ---
 
@@ -115,7 +121,7 @@
 - ANAL-01: `melodyi-search analyze providers` 命令
 - ANAL-02: 成功率、响应时间、结果数统计
 - ANAL-03: 域名覆盖分析
-- ANAL-04: 按域名查看供应商表现
+- ANAL-04: 按域名查看各供应商表现对比
 
 ### Success Criteria
 
@@ -201,3 +207,4 @@
 ---
 
 *Roadmap created: 2026-05-04*
+*Phase 1 plans added: 2026-05-06*
