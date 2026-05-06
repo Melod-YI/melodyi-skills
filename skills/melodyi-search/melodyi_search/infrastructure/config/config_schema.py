@@ -5,6 +5,15 @@ from pydantic import BaseModel, Field
 from melodyi_search.domain.models.provider_config import ProviderConfig
 
 
+class DatabaseConfig(BaseModel):
+    """数据库配置"""
+
+    database_path: str = Field(
+        default="./data/compare.db",
+        description="SQLite 数据库文件路径"
+    )
+
+
 class ModeConfig(BaseModel):
     """运行模式配置"""
 
@@ -25,6 +34,7 @@ class Config(BaseModel):
     providers: List[ProviderConfig] = Field(..., description="提供商配置数组")
     mode: ModeConfig = Field(default_factory=ModeConfig, description="运行模式")
     fallback: FallbackConfig = Field(default_factory=FallbackConfig, description="回退配置")
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig, description="数据库配置")
 
     def get_provider_names(self) -> List[str]:
         """获取所有提供商名称列表"""

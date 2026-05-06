@@ -25,9 +25,12 @@ providers:
       type: auto
 
 mode:
-  comparison: false
+  comparison: true
   log_dir: ./logs
 
 fallback:
   retry_count: 2
   retry_delay_ms: 1000
+
+database:
+  database_path: ./data/compare.db
