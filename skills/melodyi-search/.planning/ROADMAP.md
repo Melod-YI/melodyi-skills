@@ -22,11 +22,13 @@
 
 **Goal:** 建立 SQLite 久化基础设施，为对比数据存储提供基础
 
+**Status:** ✓ Complete (2026-05-06)
+
 **Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] 01-01-PLAN.md — 配置扩展与数据库管理器实现 (Wave 1)
-- [ ] 01-02-PLAN.md — 数据库管理器单元测试 (Wave 2, TDD)
+- [x] 01-01-PLAN.md — 配置扩展与数据库管理器实现 (Wave 1) ✓
+- [x] 01-02-PLAN.md — 数据库管理器单元测试 (Wave 2, TDD) ✓
 
 ### Requirements Mapped
 
@@ -172,11 +174,11 @@ Plans:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | Phase 1 | Pending |
-| DB-02 | Phase 1 | Pending |
-| DB-03 | Phase 1 | Pending |
-| DB-04 | Phase 1 | Pending |
-| DB-05 | Phase 1 | Pending |
+| DB-01 | Phase 1 | ✓ Complete |
+| DB-02 | Phase 1 | ✓ Complete |
+| DB-03 | Phase 1 | ✓ Complete |
+| DB-04 | Phase 1 | ✓ Complete |
+| DB-05 | Phase 1 | ✓ Complete |
 | COMP-01 | Phase 2 | Pending |
 | COMP-02 | Phase 2 | Pending |
 | COMP-03 | Phase 2 | Pending |
