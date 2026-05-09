@@ -1,10 +1,15 @@
 """ExecutionStrategy 单元测试"""
 
+import os
+import tempfile
 import threading
 import time
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 from melodyi_search.domain.services.execution_strategy import ExecutionStrategy
+from melodyi_search.domain.services.comparison_recorder import ComparisonRecorder
+from melodyi_search.infrastructure.database.database_manager import DatabaseManager
+from melodyi_search.infrastructure.config.config_schema import DatabaseConfig
 from melodyi_search.providers.base_provider import BaseProvider, ProviderSearchRequest, ProviderSearchResult
 from melodyi_search.domain.models.search_result import SearchResultItem
 
@@ -246,7 +251,27 @@ class TestExecutionStrategyNormal:
 class TestExecutionStrategyComparison:
     """比对模式测试"""
 
-    def test_first_provider_returns_immediately(self):
+    @pytest.fixture
+    def temp_db(self):
+        """创建临时数据库"""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+            db_path = f.name
+        config = DatabaseConfig(database_path=db_path)
+        manager = DatabaseManager(config)
+        manager.init_database()
+        yield manager
+        # Cleanup
+        try:
+            os.unlink(db_path)
+        except Exception:
+            pass
+
+    @pytest.fixture
+    def recorder(self, temp_db):
+        """创建 recorder 实例"""
+        return ComparisonRecorder(temp_db)
+
+    def test_first_provider_returns_immediately(self, recorder):
         """测试第一个提供商立即返回"""
         strategy = ExecutionStrategy()
         providers = [
@@ -265,14 +290,14 @@ class TestExecutionStrategyComparison:
         ]
         request = ProviderSearchRequest(query="test query")
 
-        result = strategy.execute_comparison(providers, request)
+        result = strategy.execute_comparison(providers, request, recorder)
 
         assert result.is_success()
         assert result.provider == "first-provider"
         assert len(result.results) == 1
         assert result.results[0].title == "First"
 
-    def test_first_provider_fails(self):
+    def test_first_provider_fails(self, recorder):
         """测试第一个提供商失败"""
         strategy = ExecutionStrategy()
         providers = [
@@ -288,24 +313,24 @@ class TestExecutionStrategyComparison:
         ]
         request = ProviderSearchRequest(query="test query")
 
-        result = strategy.execute_comparison(providers, request)
+        result = strategy.execute_comparison(providers, request, recorder)
 
         # 比对模式始终返回第一个提供商的结果（即使失败）
         assert not result.is_success()
         assert result.provider == "first-provider"
         assert result.error.error_type == "PROVIDER_ERROR"
 
-    def test_empty_providers_list_comparison(self):
+    def test_empty_providers_list_comparison(self, recorder):
         """测试比对模式空提供商列表"""
         strategy = ExecutionStrategy()
         request = ProviderSearchRequest(query="test query")
 
-        result = strategy.execute_comparison([], request)
+        result = strategy.execute_comparison([], request, recorder)
 
         assert not result.is_success()
         assert result.error.error_type == "NO_PROVIDERS"
 
-    def test_single_provider_comparison(self):
+    def test_single_provider_comparison(self, recorder):
         """测试比对模式只有一个提供商"""
         strategy = ExecutionStrategy()
         providers = [
@@ -317,12 +342,12 @@ class TestExecutionStrategyComparison:
         ]
         request = ProviderSearchRequest(query="test query")
 
-        result = strategy.execute_comparison(providers, request)
+        result = strategy.execute_comparison(providers, request, recorder)
 
         assert result.is_success()
         assert result.provider == "only-provider"
 
-    def test_comparison_log_included(self):
+    def test_comparison_log_included(self, recorder):
         """测试比对日志包含在结果中"""
         strategy = ExecutionStrategy()
         providers = [
@@ -332,7 +357,7 @@ class TestExecutionStrategyComparison:
         ]
         request = ProviderSearchRequest(query="test query")
 
-        result = strategy.execute_comparison(providers, request)
+        result = strategy.execute_comparison(providers, request, recorder)
 
         assert result.comparison_log is not None
         assert result.comparison_log["mode"] == "comparison"
@@ -340,7 +365,7 @@ class TestExecutionStrategyComparison:
         assert "second" in result.comparison_log["background_providers"]
         assert "third" in result.comparison_log["background_providers"]
 
-    def test_background_providers_execute(self):
+    def test_background_providers_execute(self, recorder):
         """测试后台提供商被执行"""
         strategy = ExecutionStrategy()
         executed_providers = []
@@ -357,7 +382,7 @@ class TestExecutionStrategyComparison:
         ]
         request = ProviderSearchRequest(query="test query")
 
-        result = strategy.execute_comparison(providers, request)
+        result = strategy.execute_comparison(providers, request, recorder)
 
         # 第一个提供商应该立即执行
         assert "first" in executed_providers
@@ -369,7 +394,7 @@ class TestExecutionStrategyComparison:
         assert "second" in executed_providers
         assert "third" in executed_providers
 
-    def test_comparison_results_tracking(self):
+    def test_comparison_results_tracking(self, recorder):
         """测试比对结果追踪"""
         strategy = ExecutionStrategy()
         providers = [
@@ -378,7 +403,7 @@ class TestExecutionStrategyComparison:
         ]
         request = ProviderSearchRequest(query="test query")
 
-        strategy.execute_comparison(providers, request)
+        strategy.execute_comparison(providers, request, recorder)
 
         # 等待后台线程完成
         time.sleep(0.2)
@@ -389,7 +414,7 @@ class TestExecutionStrategyComparison:
         assert results["first"]["status"] == "success"
         assert results["second"]["status"] == "success"
 
-    def test_callback_called_for_first_provider(self):
+    def test_callback_called_for_first_provider(self, recorder):
         """测试比对模式下第一个提供商调用回调"""
         strategy = ExecutionStrategy()
         providers = [
@@ -405,12 +430,12 @@ class TestExecutionStrategyComparison:
         def callback(result):
             callback_results.append(result)
 
-        strategy.execute_comparison(providers, request, on_provider_complete=callback)
+        strategy.execute_comparison(providers, request, recorder, on_provider_complete=callback)
 
         assert len(callback_results) == 1
         assert callback_results[0].provider == "first-provider"
 
-    def test_callback_called_for_background_providers(self):
+    def test_callback_called_for_background_providers(self, recorder):
         """测试比对模式下后台提供商也调用回调"""
         strategy = ExecutionStrategy()
         providers = [
@@ -426,7 +451,7 @@ class TestExecutionStrategyComparison:
             with callback_lock:
                 callback_results.append(result)
 
-        strategy.execute_comparison(providers, request, on_provider_complete=callback)
+        strategy.execute_comparison(providers, request, recorder, on_provider_complete=callback)
 
         # 等待后台线程完成
         time.sleep(0.3)
@@ -434,7 +459,7 @@ class TestExecutionStrategyComparison:
         with callback_lock:
             assert len(callback_results) == 3
 
-    def test_background_provider_exception_handling(self):
+    def test_background_provider_exception_handling(self, recorder):
         """测试后台提供商异常处理"""
         strategy = ExecutionStrategy()
         providers = [
@@ -445,7 +470,7 @@ class TestExecutionStrategyComparison:
         request = ProviderSearchRequest(query="test query")
 
         # 不应该抛出异常
-        result = strategy.execute_comparison(providers, request)
+        result = strategy.execute_comparison(providers, request, recorder)
 
         assert result.is_success()
 
@@ -461,6 +486,26 @@ class TestExecutionStrategyComparison:
 class TestExecutionStrategyResponseTime:
     """响应时间测试"""
 
+    @pytest.fixture
+    def temp_db(self):
+        """创建临时数据库"""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+            db_path = f.name
+        config = DatabaseConfig(database_path=db_path)
+        manager = DatabaseManager(config)
+        manager.init_database()
+        yield manager
+        # Cleanup
+        try:
+            os.unlink(db_path)
+        except Exception:
+            pass
+
+    @pytest.fixture
+    def recorder(self, temp_db):
+        """创建 recorder 实例"""
+        return ComparisonRecorder(temp_db)
+
     def test_response_time_preserved(self):
         """测试响应时间被保留"""
         strategy = ExecutionStrategy()
@@ -475,7 +520,7 @@ class TestExecutionStrategyResponseTime:
 
         assert result.response_time_ms == 250
 
-    def test_response_time_comparison_mode(self):
+    def test_response_time_comparison_mode(self, recorder):
         """测试比对模式响应时间"""
         strategy = ExecutionStrategy()
         provider = MockProvider(
@@ -485,13 +530,33 @@ class TestExecutionStrategyResponseTime:
         )
         request = ProviderSearchRequest(query="test query")
 
-        result = strategy.execute_comparison([provider], request)
+        result = strategy.execute_comparison([provider], request, recorder)
 
         assert result.response_time_ms == 300
 
 
 class TestExecutionStrategyResultConversion:
     """结果转换测试"""
+
+    @pytest.fixture
+    def temp_db(self):
+        """创建临时数据库"""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+            db_path = f.name
+        config = DatabaseConfig(database_path=db_path)
+        manager = DatabaseManager(config)
+        manager.init_database()
+        yield manager
+        # Cleanup
+        try:
+            os.unlink(db_path)
+        except Exception:
+            pass
+
+    @pytest.fixture
+    def recorder(self, temp_db):
+        """创建 recorder 实例"""
+        return ComparisonRecorder(temp_db)
 
     def test_successful_result_conversion(self):
         """测试成功结果转换"""
@@ -525,7 +590,7 @@ class TestExecutionStrategyResultConversion:
         # 单个提供商失败时，返回 ALL_PROVIDERS_FAILED
         assert result.error.error_type == "ALL_PROVIDERS_FAILED"
 
-    def test_comparison_mode_returns_first_provider_only(self):
+    def test_comparison_mode_returns_first_provider_only(self, recorder):
         """测试比对模式只返回第一个提供商结果"""
         strategy = ExecutionStrategy()
         providers = [
@@ -542,7 +607,201 @@ class TestExecutionStrategyResultConversion:
         ]
         request = ProviderSearchRequest(query="test query")
 
-        result = strategy.execute_comparison(providers, request)
+        result = strategy.execute_comparison(providers, request, recorder)
 
         assert len(result.results) == 1
         assert result.results[0].title == "First"
+
+
+class TestComparisonPersistence:
+    """集成测试: Compare 模式持久化 (COMP-02, COMP-06, COMP-07)"""
+
+    @pytest.fixture
+    def temp_db(self):
+        """创建临时数据库"""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+            db_path = f.name
+        config = DatabaseConfig(database_path=db_path)
+        manager = DatabaseManager(config)
+        manager.init_database()
+        yield manager
+        # Cleanup
+        try:
+            os.unlink(db_path)
+        except Exception:
+            pass
+
+    @pytest.fixture
+    def recorder(self, temp_db):
+        """创建 recorder 实例"""
+        return ComparisonRecorder(temp_db)
+
+    @pytest.fixture
+    def strategy(self):
+        """创建执行策略实例"""
+        return ExecutionStrategy()
+
+    def test_execute_comparison_accepts_recorder_parameter(self, strategy, recorder, temp_db):
+        """测试 execute_comparison() 接受 recorder 参数"""
+        provider = MockProvider(
+            name="test_provider",
+            should_succeed=True,
+            results=[create_search_item("Test", "https://example.com")]
+        )
+        request = ProviderSearchRequest(query="test", max_results=10)
+
+        result = strategy.execute_comparison(
+            providers=[provider],
+            request=request,
+            recorder=recorder
+        )
+
+        # COMP-06: 验证 session_id 存在
+        assert result.session_id is not None
+
+    def test_session_written_to_database(self, strategy, recorder, temp_db):
+        """测试 session 写入数据库"""
+        provider = MockProvider(
+            name="test_provider",
+            should_succeed=True,
+            results=[create_search_item("Test", "https://example.com")]
+        )
+        request = ProviderSearchRequest(query="test query", max_results=10)
+
+        result = strategy.execute_comparison(
+            providers=[provider],
+            request=request,
+            recorder=recorder
+        )
+
+        # 验证数据库写入
+        conn = temp_db.get_connection()
+        session = conn.execute(
+            "SELECT session_id, query FROM comparison_sessions WHERE session_id=?",
+            (result.session_id,)
+        ).fetchone()
+        conn.close()
+
+        assert session is not None
+        assert session[1] == "test query"
+
+    def test_first_provider_result_written_to_database(self, strategy, recorder, temp_db):
+        """测试第一个供应商结果写入数据库"""
+        provider = MockProvider(
+            name="provider1",
+            should_succeed=True,
+            results=[create_search_item("Test", "https://example.com")]
+        )
+        request = ProviderSearchRequest(query="test", max_results=10)
+
+        result = strategy.execute_comparison(
+            providers=[provider],
+            request=request,
+            recorder=recorder
+        )
+
+        # 验证供应商结果写入
+        conn = temp_db.get_connection()
+        provider_result = conn.execute(
+            "SELECT provider, response_time_ms, results_count FROM provider_results WHERE session_id=?",
+            (result.session_id,)
+        ).fetchone()
+        conn.close()
+
+        assert provider_result is not None
+        assert provider_result[0] == "provider1"
+
+    def test_daemon_false_thread_wait(self, strategy, recorder, temp_db):
+        """测试 daemon=False + thread.join(timeout=10) 确保写入"""
+        provider1 = MockProvider(
+            name="provider1",
+            should_succeed=True,
+            results=[create_search_item("P1", "https://p1.com")],
+            response_time_ms=50
+        )
+        provider2 = MockProvider(
+            name="provider2",
+            should_succeed=True,
+            results=[create_search_item("P2", "https://p2.com")],
+            response_time_ms=50
+        )
+
+        request = ProviderSearchRequest(query="test", max_results=10)
+        result = strategy.execute_comparison(
+            providers=[provider1, provider2],
+            request=request,
+            recorder=recorder
+        )
+
+        # 等待后台线程完成（strategy 内部已等待）
+        # 验证两个供应商结果都已写入
+        conn = temp_db.get_connection()
+        providers_written = conn.execute(
+            "SELECT provider FROM provider_results WHERE session_id=?",
+            (result.session_id,)
+        ).fetchall()
+        conn.close()
+
+        assert len(providers_written) == 2
+
+    def test_search_results_written_with_rank(self, strategy, recorder, temp_db):
+        """测试搜索结果写入数据库含 rank 字段"""
+        provider = MockProvider(
+            name="test_provider",
+            should_succeed=True,
+            results=[
+                create_search_item("Result 1", "https://example.com/1"),
+                create_search_item("Result 2", "https://example.com/2")
+            ]
+        )
+        request = ProviderSearchRequest(query="test", max_results=10)
+
+        result = strategy.execute_comparison(
+            providers=[provider],
+            request=request,
+            recorder=recorder
+        )
+
+        # 验证搜索结果写入
+        conn = temp_db.get_connection()
+        search_results = conn.execute(
+            "SELECT rank, title FROM search_results WHERE session_id=? ORDER BY rank",
+            (result.session_id,)
+        ).fetchall()
+        conn.close()
+
+        assert len(search_results) == 2
+        assert search_results[0][0] == 1  # rank 字段
+        assert search_results[1][0] == 2
+
+    def test_background_thread_parameter_recorder_session_id(self, strategy, recorder, temp_db):
+        """测试后台线程参数包含 recorder 和 session_id"""
+        provider1 = MockProvider(
+            name="provider1",
+            should_succeed=True,
+            results=[create_search_item("P1", "https://p1.com")],
+            response_time_ms=50
+        )
+        provider2 = MockProvider(
+            name="provider2",
+            should_succeed=True,
+            results=[create_search_item("P2", "https://p2.com")],
+            response_time_ms=50
+        )
+
+        request = ProviderSearchRequest(query="test", max_results=10)
+        result = strategy.execute_comparison(
+            providers=[provider1, provider2],
+            request=request,
+            recorder=recorder
+        )
+
+        # 后台供应商结果应该写入数据库
+        conn = temp_db.get_connection()
+        provider2_result = conn.execute(
+            "SELECT provider FROM provider_results WHERE session_id=? AND provider=?",
+            (result.session_id, "provider2")
+        ).fetchone()
+        conn.close()
+
+        assert provider2_result is not None

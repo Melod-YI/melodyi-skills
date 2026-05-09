@@ -9,6 +9,7 @@ import logging
 import threading
 from typing import List, Callable, Optional
 from melodyi_search.domain.models.search_result import UnifiedSearchResult, SearchError
+from melodyi_search.domain.services.comparison_recorder import ComparisonRecorder
 from melodyi_search.providers.base_provider import BaseProvider, ProviderSearchRequest, ProviderSearchResult
 
 logger = logging.getLogger(__name__)
@@ -84,23 +85,37 @@ class ExecutionStrategy:
         self,
         providers: List[BaseProvider],
         request: ProviderSearchRequest,
+        recorder: ComparisonRecorder,
         on_provider_complete: Optional[Callable[[ProviderSearchResult], None]] = None
     ) -> UnifiedSearchResult:
         """比对模式执行
 
         第一个提供商正常执行并返回，剩余提供商在后台线程执行并记录日志。
-        使用 threading.Thread(daemon=True) 实现后台执行。
+        使用 threading.Thread(daemon=False) 实现后台执行，并等待线程完成。
 
         Args:
             providers: 提供商列表
             request: 统一的搜索请求
+            recorder: 数据持久化服务 (COMP-02)
             on_provider_complete: 每个提供商完成后的回调（可选，后台执行时也会调用）
 
         Returns:
-            第一个提供商的结果
+            第一个提供商的结果（含 session_id）
+
+        决策参考:
+        - D-01: daemon=False + thread.join(timeout=10)
+        - D-02: 每个供应商完成后立即写入数据库
+        - COMP-06: 返回包含 session_id 的结果
         """
         if not providers:
             return self._create_empty_error_result("NO_PROVIDERS", "没有可用的提供商")
+
+        # D-03: 生成 session_id
+        session_id = recorder.generate_session_id()
+
+        # 写入 session 元数据
+        recorder.write_session(session_id, request)
+        logger.info(f"[Comparison] Session created: {session_id}")
 
         first_provider = providers[0]
         remaining_providers = providers[1:]
@@ -108,6 +123,10 @@ class ExecutionStrategy:
         # 执行第一个提供商
         logger.debug(f"[Comparison] Executing first provider: {first_provider.name}")
         first_result = first_provider.search(request)
+
+        # D-02: 立即写入第一个供应商结果
+        recorder.write_provider_result(session_id, first_result)
+        recorder.write_search_results(session_id, first_provider.name, first_result.results)
 
         # 回调通知
         if on_provider_complete:
@@ -124,17 +143,28 @@ class ExecutionStrategy:
             }
 
         # 剩余提供商在后台线程执行
+        background_thread = None
         if remaining_providers:
-            thread = threading.Thread(
+            # D-01: daemon=False 确保线程完成写入
+            background_thread = threading.Thread(
                 target=self._execute_background_providers,
-                args=(remaining_providers, request, on_provider_complete),
-                daemon=True
+                args=(remaining_providers, request, recorder, session_id, on_provider_complete),
+                daemon=False
             )
-            thread.start()
+            background_thread.start()
             logger.debug(f"[Comparison] Started background thread for {len(remaining_providers)} providers")
+
+        # D-01: 等待后台线程完成 (timeout=10)
+        if background_thread:
+            background_thread.join(timeout=10)
+            if background_thread.is_alive():
+                logger.warning(f"[Comparison] Background thread still alive after 10s timeout, proceeding anyway")
 
         # 转换并返回第一个提供商的结果
         unified_result = self._convert_to_unified_result(first_result)
+
+        # COMP-06: 添加 session_id
+        unified_result.session_id = session_id
 
         # 附加比对日志信息
         with self._comparison_lock:
@@ -150,6 +180,8 @@ class ExecutionStrategy:
         self,
         providers: List[BaseProvider],
         request: ProviderSearchRequest,
+        recorder: ComparisonRecorder,
+        session_id: str,
         on_provider_complete: Optional[Callable[[ProviderSearchResult], None]] = None
     ) -> None:
         """后台执行剩余提供商
@@ -157,13 +189,23 @@ class ExecutionStrategy:
         Args:
             providers: 剩余提供商列表
             request: 统一的搜索请求
+            recorder: 数据持久化服务
+            session_id: 会话 ID
             on_provider_complete: 完成回调
+
+        决策参考:
+        - D-02: 每个供应商完成后立即写入数据库
+        - D-04: 失败时日志记录继续执行
         """
         for provider in providers:
             provider_name = provider.name
             try:
                 logger.debug(f"[Comparison] Background executing provider: {provider_name}")
                 result = provider.search(request)
+
+                # D-02: 立即写入数据库
+                recorder.write_provider_result(session_id, result)
+                recorder.write_search_results(session_id, provider_name, result.results)
 
                 # 回调通知
                 if on_provider_complete:
@@ -189,6 +231,7 @@ class ExecutionStrategy:
             except Exception as e:
                 error_msg = str(e)
                 logger.error(f"[Comparison] Background provider {provider_name} raised exception: {error_msg}")
+                # D-04: 继续执行下一个供应商
                 with self._comparison_lock:
                     self._comparison_results[provider_name] = {
                         "status": "exception",

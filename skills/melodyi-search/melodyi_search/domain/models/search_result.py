@@ -52,6 +52,7 @@ class UnifiedSearchResult(BaseModel):
     results: List[SearchResultItem] = Field(default_factory=list, description="搜索结果列表")
     comparison_log: Optional[dict] = Field(default=None, description="比对模式内部数据")
     error: Optional[SearchError] = Field(default=None, description="错误及指导")
+    session_id: Optional[str] = Field(default=None, description="对比会话 ID (COMP-06)")
 
     def is_success(self) -> bool:
         """检查是否成功"""
