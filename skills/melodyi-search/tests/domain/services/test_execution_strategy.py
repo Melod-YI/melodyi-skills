@@ -805,3 +805,46 @@ class TestComparisonPersistence:
         conn.close()
 
         assert provider2_result is not None
+
+    def test_result_contains_session_id(self, strategy, recorder, temp_db):
+        """测试 execute_comparison() 返回 session_id 并验证格式 (COMP-06)"""
+        mock_provider = MockProvider(
+            name="test_provider",
+            should_succeed=True,
+            results=[create_search_item("Test", "https://example.com")]
+        )
+        request = ProviderSearchRequest(query="test", max_results=10)
+
+        result = strategy.execute_comparison(
+            providers=[mock_provider],
+            request=request,
+            recorder=recorder
+        )
+
+        # 验证 session_id 存在
+        assert result.session_id is not None
+
+        # 验证格式 YYYYMMDD-HHMMSS-XXXX
+        session_id = result.session_id
+        assert session_id.count('-') == 2
+        parts = session_id.split('-')
+        assert len(parts[0]) == 8  # YYYYMMDD
+        assert len(parts[1]) == 6  # HHMMSS
+        assert len(parts[2]) == 4  # XXXX
+
+    def test_normal_mode_no_session_id(self, strategy):
+        """测试正常模式不返回 session_id (COMP-06)"""
+        mock_provider = MockProvider(
+            name="test_provider",
+            should_succeed=True,
+            results=[create_search_item("Test", "https://example.com")]
+        )
+        request = ProviderSearchRequest(query="test", max_results=10)
+
+        result = strategy.execute_normal(
+            providers=[mock_provider],
+            request=request
+        )
+
+        # 正常模式无 session_id
+        assert result.session_id is None
