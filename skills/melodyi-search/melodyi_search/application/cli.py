@@ -135,6 +135,11 @@ def search(
         else:
             provider_configs = config.providers
 
+        # 验证提供商列表非空
+        if not provider_configs:
+            click.echo("错误: 配置文件中未定义任何提供商", err=True)
+            sys.exit(1)
+
         # 4. 创建提供商实例
         providers = ProviderFactory.create_all(provider_configs)
 
@@ -153,9 +158,19 @@ def search(
         if use_comparison:
             # 创建 DatabaseManager 和 ComparisonRecorder
             db_manager = DatabaseManager(config.database)
-            db_manager.init_database()  # D-01: Lazy initialization
-            recorder = ComparisonRecorder(db_manager)
-            result = strategy.execute_comparison(providers, provider_requests[0], recorder)
+            try:
+                db_manager.init_database()  # D-01: Lazy initialization
+                recorder = ComparisonRecorder(db_manager)
+            except Exception as e:
+                click.echo(f"数据库初始化失败: {e}", err=True)
+                click.echo("请检查数据库路径配置和权限", err=True)
+                sys.exit(1)
+            try:
+                result = strategy.execute_comparison(providers, provider_requests[0], recorder)
+            finally:
+                # 确保数据库连接关闭
+                if hasattr(db_manager, 'close'):
+                    db_manager.close()
         else:
             result = strategy.execute_normal(providers, provider_requests[0])
 
@@ -252,13 +267,7 @@ def _output_text(result):
     click.echo(f"响应时间: {result.response_time_ms}ms")
     click.echo(f"结果数: {len(result.results)}")
 
-    if result.comparison_log:
-        click.echo(f"\n比对模式:")
-        click.echo(f"  首选提供商: {result.comparison_log.get('first_provider')}")
-        bg_providers = result.comparison_log.get('background_providers', [])
-        if bg_providers:
-            click.echo(f"  后台提供商: {', '.join(bg_providers)}")
-
+    # D-03/D-07: 不输出 comparison_log，保持与普通 search 一致
     if result.results:
         click.echo(f"\n搜索结果:")
         for i, item in enumerate(result.results, 1):
@@ -274,6 +283,8 @@ def _output_text(result):
 def _output_json(result):
     """JSON 格式输出"""
     result_dict = result.model_dump(mode="python")
+    # D-06: 移除 session_id，仅保留数据库记录
+    result_dict.pop("session_id", None)
     click.echo(json.dumps(result_dict, indent=2, ensure_ascii=False, default=str))
 
 
