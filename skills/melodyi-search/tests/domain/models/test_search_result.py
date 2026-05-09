@@ -148,3 +148,34 @@ class TestUnifiedSearchResult:
         item = SearchResultItem(title="Test", url="https://example.com", description="test")
         result = UnifiedSearchResult(provider="test", response_time_ms=100, results=[item])
         assert result.has_results() is True
+
+    def test_unified_search_result_session_id_default(self):
+        """测试 session_id 默认值为 None (COMP-06)"""
+        result = UnifiedSearchResult(
+            provider="test",
+            response_time_ms=100,
+            results=[]
+        )
+        assert result.session_id is None
+
+    def test_unified_search_result_session_id_can_be_set(self):
+        """测试 session_id 可被赋值 (COMP-06)"""
+        result = UnifiedSearchResult(
+            provider="test",
+            response_time_ms=100,
+            results=[],
+            session_id="20260509-143052-a1b2"
+        )
+        assert result.session_id == "20260509-143052-a1b2"
+
+    def test_unified_search_result_session_id_json_serialization(self):
+        """测试 session_id 可序列化为 JSON (COMP-06)"""
+        result = UnifiedSearchResult(
+            provider="test",
+            response_time_ms=100,
+            results=[],
+            session_id="20260509-143052-a1b2"
+        )
+        json_str = result.model_dump_json()
+        assert "session_id" in json_str
+        assert "20260509-143052-a1b2" in json_str
