@@ -110,8 +110,8 @@ Plans:
 **Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] 03-01-PLAN.md — CLI comparison 模式修复 + 配置覆盖实现 (Wave 1)
-- [ ] 03-02-PLAN.md — E2E 验证测试 (Wave 2, checkpoint)
+- [x] 03-01-PLAN.md — CLI comparison 模式修复 + 配置覆盖实现 (Wave 1)
+- [x] 03-02-PLAN.md — E2E 验证测试 (Wave 2, checkpoint)
 
 ### Requirements Mapped
 
