@@ -105,7 +105,7 @@ Plans:
 
 **Goal:** 验证 compare 模式数据持久化功能，确保 search --comparison 参数正确工作
 
-**Status:** Planned
+**Status:** ✓ Complete (2026-05-09)
 
 **Plans:** 2 plans in 2 waves
 
@@ -184,28 +184,42 @@ Plans:
 
 **Goal:** 系统集成验证，确保现有功能不受影响
 
+**Status:** ○ Planned
+
+**Plans:** 1 plan in 1 wave
+
+Plans:
+- [ ] 05-01-PLAN.md — 回归测试验证 + 集成点确认 (Wave 1) — INT-01, INT-02, INT-03, INT-04
+
 ### Requirements Mapped
 
-- INT-01: 正常模式不变
-- INT-02: skill.md 不变
-- INT-03: 配置文件不变
-- INT-04: 数据库路径配置项
+- INT-01: Normal Search 模式不变 (Plan 01) — 回归测试验证
+- INT-02: skill.md 参数定义不变 (Plan 01) — Agent 成点确认
+- INT-03: 配置文件向后兼容 (Plan 01) — 配置验证
+- INT-04: 数据库路径配置项 (Plan 01) — 已存在于 default_config.yaml
 
 ### Success Criteria
 
-1. 现有 `search` 命令正常模式功能不变
-2. E2E 测试覆盖 compare → history → analyze 流程
-3. skill.md 格式不变，Agent 集成测试通过
-4. 所有单元测试 + 集成测试通过
+1. 所有 446 tests 通过，无新增失败测试
+2. Normal Search 模式（comparison OFF）输出格式与 Phase 01-02 前一致
+3. skill.md 参数定义不变，Agent 使用方式不变
+4. 配置文件向后兼容，database 配置项可选
+5. 数据库作为可选组件，关闭 comparison 时不初始化
+
+### Key Decisions (from CONTEXT.md)
+
+- D-01: 完整回归测试覆盖（Normal Search + Providers）
+- D-02: Agent 成点不变（skill.md 格式不变）
+- D-03: 数据库为新增组件，不影响现有路径
 
 ### Tasks
 
-1. 回归测试现有 `search` 命令
-2. E2E 测试：compare → history list → history show → analyze
-3. 验证 skill.md 无需修改
-4. 添加数据库路径配置项到 `default_config.yaml`
-5. 更新 `skill.md` 文档说明 compare/history/analyze 命令（可选）
-6. 最终集成测试全部通过
+1. 执行完整回归测试（pytest tests/ -v）
+2. 验证 Normal Search 模式（comparison 关闭）功能不变
+3. 验证 Provider API 连通性（单元测试层面）
+4. 确认 skill.md 参数定义不变
+5. 确认配置文件向后兼容
+6. 确认数据库为可选组件
 
 ---
 
@@ -253,4 +267,6 @@ Plans:
 *Phase 1 complete: 2026-05-06*
 *Phase 2 plans added: 2026-05-09*
 *Phase 2 complete: 2026-05-09*
-*Phase 3 plans added: 2026-05-09*
+*Phase 3 plans added: 2026-05-09**Phase 3 complete: 2026-05-09*
+*Phase 4 skipped: 2026-05-09*
+*Phase 5 plans added: 2026-05-09*
