@@ -279,7 +279,10 @@ class TestCLIComparisonE2E:
             assert output_dict["provider"] == "tavily"
             assert len(output_dict["results"]) == 1
 
-            # 验证 session_id 不在 JSON 输出中 (D-06)
+            # 验证 session_id 不在 JSON 输出中 (D-06) - 关键断言
+            assert "session_id" not in output_dict
+            assert "20260509-130000-c3d4" not in result.output
+
             # 注意: UnifiedSearchResult.session_id 存在，但 CLI 输出不显示
             # 这是 D-06 的约束: session_id 仅数据库记录，不在 CLI 输出
 
