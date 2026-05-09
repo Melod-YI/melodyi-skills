@@ -420,6 +420,255 @@ class TestSearchCommand:
         assert result.exit_code == 0
         mock_strategy.execute_comparison.assert_called_once()
 
+    @patch("melodyi_search.application.cli.ComparisonRecorder")
+    @patch("melodyi_search.application.cli.DatabaseManager")
+    @patch("melodyi_search.application.cli.ProviderFactory")
+    @patch("melodyi_search.application.cli.ParameterAdapter")
+    @patch("melodyi_search.application.cli.ExecutionStrategy")
+    @patch("melodyi_search.application.cli.load_config")
+    def test_search_comparison_mode_with_config_enabled(
+        self,
+        mock_load_config,
+        mock_strategy_class,
+        mock_adapter_class,
+        mock_factory_class,
+        mock_db_manager_class,
+        mock_recorder_class,
+    ):
+        """测试配置开启比对模式，CLI 不指定 --comparison 参数"""
+        # D-05: 配置开启时，CLI 不指定则默认启用
+        mock_provider_config = ProviderConfig(
+            name="tavily",
+            api_key="test-key",
+            timeout_ms=10000,
+            max_results=10,
+        )
+        mock_config = Config(
+            providers=[mock_provider_config],
+            mode=ModeConfig(comparison=True),  # 配置开启 comparison
+            fallback=FallbackConfig(),
+        )
+        mock_load_config.return_value = mock_config
+
+        mock_provider = MagicMock()
+        mock_provider.name = "tavily"
+        mock_factory_class.create_all.return_value = [mock_provider]
+
+        mock_request = MagicMock()
+        mock_adapter_class.adapt.return_value = mock_request
+
+        mock_result = UnifiedSearchResult(
+            provider="tavily",
+            response_time_ms=100,
+            results=[],
+            comparison_log={
+                "mode": "comparison",
+                "first_provider": "tavily",
+                "background_providers": [],
+            },
+        )
+        mock_strategy = MagicMock()
+        mock_strategy.execute_comparison.return_value = mock_result
+        mock_strategy_class.return_value = mock_strategy
+
+        # Mock DatabaseManager and ComparisonRecorder
+        mock_db_manager = MagicMock()
+        mock_db_manager_class.return_value = mock_db_manager
+        mock_recorder = MagicMock()
+        mock_recorder_class.return_value = mock_recorder
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["search", "test query"])  # 不指定 --comparison
+
+        assert result.exit_code == 0
+        # 验证 DatabaseManager 被创建
+        mock_db_manager_class.assert_called_once_with(mock_config.database)
+        # 验证 init_database 被调用
+        mock_db_manager.init_database.assert_called_once()
+        # 验证 ComparisonRecorder 被创建
+        mock_recorder_class.assert_called_once_with(mock_db_manager)
+        # 验证 execute_comparison 被调用（包含 recorder 参数）
+        mock_strategy.execute_comparison.assert_called_once()
+        call_args = mock_strategy.execute_comparison.call_args
+        assert len(call_args[0]) >= 3  # providers, request, recorder
+        assert call_args[0][2] == mock_recorder  # 第三个参数是 recorder
+
+    @patch("melodyi_search.application.cli.ComparisonRecorder")
+    @patch("melodyi_search.application.cli.DatabaseManager")
+    @patch("melodyi_search.application.cli.ProviderFactory")
+    @patch("melodyi_search.application.cli.ParameterAdapter")
+    @patch("melodyi_search.application.cli.ExecutionStrategy")
+    @patch("melodyi_search.application.cli.load_config")
+    def test_search_comparison_mode_override_config(
+        self,
+        mock_load_config,
+        mock_strategy_class,
+        mock_adapter_class,
+        mock_factory_class,
+        mock_db_manager_class,
+        mock_recorder_class,
+    ):
+        """测试配置关闭 + CLI 指定 --comparison 则启用持久化"""
+        # D-05: 配置关闭时，CLI 指定 --comparison 则启用
+        mock_provider_config = ProviderConfig(
+            name="tavily",
+            api_key="test-key",
+            timeout_ms=10000,
+            max_results=10,
+        )
+        mock_config = Config(
+            providers=[mock_provider_config],
+            mode=ModeConfig(comparison=False),  # 配置关闭 comparison
+            fallback=FallbackConfig(),
+        )
+        mock_load_config.return_value = mock_config
+
+        mock_provider = MagicMock()
+        mock_provider.name = "tavily"
+        mock_factory_class.create_all.return_value = [mock_provider]
+
+        mock_request = MagicMock()
+        mock_adapter_class.adapt.return_value = mock_request
+
+        mock_result = UnifiedSearchResult(
+            provider="tavily",
+            response_time_ms=100,
+            results=[],
+            comparison_log={
+                "mode": "comparison",
+                "first_provider": "tavily",
+                "background_providers": [],
+            },
+        )
+        mock_strategy = MagicMock()
+        mock_strategy.execute_comparison.return_value = mock_result
+        mock_strategy_class.return_value = mock_strategy
+
+        # Mock DatabaseManager and ComparisonRecorder
+        mock_db_manager = MagicMock()
+        mock_db_manager_class.return_value = mock_db_manager
+        mock_recorder = MagicMock()
+        mock_recorder_class.return_value = mock_recorder
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["search", "test query", "--comparison"])
+
+        assert result.exit_code == 0
+        # 验证 execute_comparison 被调用（包含 recorder 参数）
+        mock_strategy.execute_comparison.assert_called_once()
+        call_args = mock_strategy.execute_comparison.call_args
+        assert len(call_args[0]) >= 3  # providers, request, recorder
+        assert call_args[0][2] == mock_recorder
+
+    @patch("melodyi_search.application.cli.ComparisonRecorder")
+    @patch("melodyi_search.application.cli.DatabaseManager")
+    @patch("melodyi_search.application.cli.ProviderFactory")
+    @patch("melodyi_search.application.cli.ParameterAdapter")
+    @patch("melodyi_search.application.cli.ExecutionStrategy")
+    @patch("melodyi_search.application.cli.load_config")
+    def test_search_normal_mode_with_config_enabled(
+        self,
+        mock_load_config,
+        mock_strategy_class,
+        mock_adapter_class,
+        mock_factory_class,
+        mock_db_manager_class,
+        mock_recorder_class,
+    ):
+        """测试配置开启 + CLI 不指定 --comparison 应启用持久化"""
+        # D-05: 配置开启时，CLI 不指定则默认启用
+        mock_provider_config = ProviderConfig(
+            name="tavily",
+            api_key="test-key",
+            timeout_ms=10000,
+            max_results=10,
+        )
+        mock_config = Config(
+            providers=[mock_provider_config],
+            mode=ModeConfig(comparison=True),  # 配置开启
+            fallback=FallbackConfig(),
+        )
+        mock_load_config.return_value = mock_config
+
+        mock_provider = MagicMock()
+        mock_provider.name = "tavily"
+        mock_factory_class.create_all.return_value = [mock_provider]
+
+        mock_request = MagicMock()
+        mock_adapter_class.adapt.return_value = mock_request
+
+        mock_result = UnifiedSearchResult(
+            provider="tavily",
+            response_time_ms=100,
+            results=[],
+        )
+        mock_strategy = MagicMock()
+        mock_strategy.execute_comparison.return_value = mock_result
+        mock_strategy_class.return_value = mock_strategy
+
+        mock_db_manager = MagicMock()
+        mock_db_manager_class.return_value = mock_db_manager
+        mock_recorder = MagicMock()
+        mock_recorder_class.return_value = mock_recorder
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["search", "test query"])
+
+        assert result.exit_code == 0
+        # 配置开启，不指定 --comparison，应调用 execute_comparison
+        mock_strategy.execute_comparison.assert_called_once()
+        mock_strategy.execute_normal.assert_not_called()
+
+    @patch("melodyi_search.application.cli.ProviderFactory")
+    @patch("melodyi_search.application.cli.ParameterAdapter")
+    @patch("melodyi_search.application.cli.ExecutionStrategy")
+    @patch("melodyi_search.application.cli.load_config")
+    def test_search_normal_mode_with_config_disabled(
+        self,
+        mock_load_config,
+        mock_strategy_class,
+        mock_adapter_class,
+        mock_factory_class,
+    ):
+        """测试配置关闭 + CLI 不指定 --comparison → 不启用持久化"""
+        # D-05: 配置关闭 + CLI 不指定 → 不启用持久化
+        mock_provider_config = ProviderConfig(
+            name="tavily",
+            api_key="test-key",
+            timeout_ms=10000,
+            max_results=10,
+        )
+        mock_config = Config(
+            providers=[mock_provider_config],
+            mode=ModeConfig(comparison=False),  # 配置关闭
+            fallback=FallbackConfig(),
+        )
+        mock_load_config.return_value = mock_config
+
+        mock_provider = MagicMock()
+        mock_provider.name = "tavily"
+        mock_factory_class.create_all.return_value = [mock_provider]
+
+        mock_request = MagicMock()
+        mock_adapter_class.adapt.return_value = mock_request
+
+        mock_result = UnifiedSearchResult(
+            provider="tavily",
+            response_time_ms=100,
+            results=[],
+        )
+        mock_strategy = MagicMock()
+        mock_strategy.execute_normal.return_value = mock_result
+        mock_strategy_class.return_value = mock_strategy
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["search", "test query"])
+
+        assert result.exit_code == 0
+        # 配置关闭 + CLI 不指定 → 应调用 execute_normal
+        mock_strategy.execute_normal.assert_called_once()
+        mock_strategy.execute_comparison.assert_not_called()
+
     @patch("melodyi_search.application.cli.ProviderFactory")
     @patch("melodyi_search.application.cli.ParameterAdapter")
     @patch("melodyi_search.application.cli.ExecutionStrategy")

@@ -18,6 +18,8 @@ from melodyi_search.domain.services.execution_strategy import ExecutionStrategy
 from melodyi_search.domain.services.parameter_adapter import ParameterAdapter
 from melodyi_search.domain.services.provider_factory import ProviderFactory
 from melodyi_search.infrastructure.config.config_loader import load_config
+from melodyi_search.domain.services.comparison_recorder import ComparisonRecorder
+from melodyi_search.infrastructure.database.database_manager import DatabaseManager
 
 
 @click.group()
@@ -142,9 +144,18 @@ def search(
         ]
 
         # 6. 执行搜索
+        # D-05: CLI 参数覆盖配置开关
+        # 配置关闭时，CLI 指定 --comparison 则启用
+        # 配置开启时，CLI 不指定则默认启用
+        use_comparison = comparison or config.mode.comparison
+
         strategy = ExecutionStrategy()
-        if comparison:
-            result = strategy.execute_comparison(providers, provider_requests[0])
+        if use_comparison:
+            # 创建 DatabaseManager 和 ComparisonRecorder
+            db_manager = DatabaseManager(config.database)
+            db_manager.init_database()  # D-01: Lazy initialization
+            recorder = ComparisonRecorder(db_manager)
+            result = strategy.execute_comparison(providers, provider_requests[0], recorder)
         else:
             result = strategy.execute_normal(providers, provider_requests[0])
 
