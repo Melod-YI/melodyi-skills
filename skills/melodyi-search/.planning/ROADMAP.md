@@ -58,14 +58,14 @@ Plans:
 
 **Goal:** 对比模式完整结果记录与持久化，为供应商质量分析提供数据基础
 
-**Status:** Pending
+**Status:** ✓ Complete (2026-05-09)
 
 **Plans:** 3 plans in 3 waves
 
 Plans:
-- [ ] 02-01-PLAN.md — ComparisonRecorder 服务实现 (Wave 1) — COMP-01, COMP-03, COMP-04, COMP-05
-- [ ] 02-02-PLAN.md — ExecutionStrategy 修改 (Wave 2) — COMP-02, COMP-07
-- [ ] 02-03-PLAN.md — UnifiedSearchResult 扩展 + 测试覆盖 (Wave 3) — COMP-06
+- [x] 02-01-PLAN.md — ComparisonRecorder 服务实现 (Wave 1) — COMP-01, COMP-03, COMP-04, COMP-05 ✓
+- [x] 02-02-PLAN.md — ExecutionStrategy 修改 (Wave 2) — COMP-02, COMP-07 ✓
+- [x] 02-03-PLAN.md — UnifiedSearchResult 扩展 + 测试覆盖 (Wave 3) — COMP-06 ✓
 
 ### Requirements Mapped
 
@@ -195,13 +195,13 @@ Plans:
 | DB-03 | Phase 1 | ✓ Complete |
 | DB-04 | Phase 1 | ✓ Complete |
 | DB-05 | Phase 1 | ✓ Complete |
-| COMP-01 | Phase 2 | Plan 01 |
-| COMP-02 | Phase 2 | Plan 02 |
-| COMP-03 | Phase 2 | Plan 01 |
-| COMP-04 | Phase 2 | Plan 01 |
-| COMP-05 | Phase 2 | Plan 01 |
-| COMP-06 | Phase 2 | Plan 03 |
-| COMP-07 | Phase 2 | Plan 02 |
+| COMP-01 | Phase 2 | ✓ Complete |
+| COMP-02 | Phase 2 | ✓ Complete |
+| COMP-03 | Phase 2 | ✓ Complete |
+| COMP-04 | Phase 2 | ✓ Complete |
+| COMP-05 | Phase 2 | ✓ Complete |
+| COMP-06 | Phase 2 | ✓ Complete |
+| COMP-07 | Phase 2 | ✓ Complete |
 | CLI-01 | Phase 3 | Pending |
 | CLI-02 | Phase 3 | Pending |
 | CLI-03 | Phase 3 | Pending |
@@ -228,3 +228,4 @@ Plans:
 *Phase 1 plans added: 2026-05-06*
 *Phase 1 complete: 2026-05-06*
 *Phase 2 plans added: 2026-05-09*
+*Phase 2 complete: 2026-05-09*
