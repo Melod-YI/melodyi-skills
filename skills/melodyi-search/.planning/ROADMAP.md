@@ -12,7 +12,7 @@
 |---|-------|------|--------------|------------------|
 | 1 | Database Infrastructure | 建立 SQLite 持久化基础设施 | DB-01~05 | 3 criteria |
 | 2 | Compare Mode Enhancement | 对比模式完整结果记录与持久化 | COMP-01~07 | 3 criteria |
-| 3 | CLI Commands | 对比历史查询与分析命令 | CLI-01~06 | 3 criteria |
+| 3 | CLI Commands | 验证 compare 模式数据持久化 | CLI-01 (modified) | 4 criteria |
 | 4 | Analysis Features | 供应商质量分析报告 | ANAL-01~04 | 3 criteria |
 | 5 | Integration & Testing | 系统集成与 E2E 测试 | INT-01~04 | 4 criteria |
 
@@ -103,30 +103,49 @@ Plans:
 
 ## Phase 3: CLI Commands
 
-**Goal:** 对比历史查询与分析命令行工具
+**Goal:** 验证 compare 模式数据持久化功能，确保 search --comparison 参数正确工作
+
+**Status:** Planned
+
+**Plans:** 2 plans in 2 waves
+
+Plans:
+- [ ] 03-01-PLAN.md — CLI comparison 模式修复 + 配置覆盖实现 (Wave 1)
+- [ ] 03-02-PLAN.md — E2E 验证测试 (Wave 2, checkpoint)
 
 ### Requirements Mapped
 
-- CLI-01: `melodyi-search compare <query>`
-- CLI-02: `melodyi-search history list`
-- CLI-03: `melodyi-search history show <session-id>`
-- CLI-04: `melodyi-search history export`
-- CLI-05: 时间范围筛选
-- CLI-06: 供应商筛选
+- CLI-01: `search --comparison` 参数覆盖配置开关 (Plan 01) — **Modified by D-01**
+- D-05: CLI --comparison 参数覆盖配置开关 (Plan 01)
+- D-07: 持久化静默执行，不显示提示信息 (Plan 01)
+- D-08: 通过测试验证数据持久化 (Plan 02)
+
+**Note:** CLI-02~06 (history 命令) 已明确抛弃，不实现 (see D-02 in CONTEXT.md)
 
 ### Success Criteria
 
-1. `compare` 命令成功执行对比并返回 session_id
-2. `history list` 显示历史记录列表
-3. `history show` 显示单次对比详情
+1. `search --comparison` 数据正确持久化到数据库
+2. 配置开启时自动启用持久化（无需 CLI 参数）
+3. CLI 输出格式不变，不显示 session_id
+4. 所有 E2E 测试通过，数据库记录正确
+
+### Key Decisions (from CONTEXT.md)
+
+- D-01: 不新增独立 compare 命令，仅使用 search --comparison
+- D-02: 抛弃 history 命令（CLI-02~06），不实现
+- D-05: CLI 参数覆盖配置开关
+- D-06: CLI 不输出 session_id
+- D-07: 持久化静默执行
+- D-08: 通过测试验证数据持久化
 
 ### Tasks
 
-1. 创建 `melodyi_search/application/cli_history.py`
-2. 实现 `compare` 命令（重用现有 search 但强制 comparison=True）
-3. 实现 `history` group 及子命令
-4. 添加筛选参数支持（--from, --to, --provider）
-5. 单元测试 `test_cli_history.py`
+1. 修复 CLI bug：传递 recorder 参数给 execute_comparison
+2. 实现配置覆盖逻辑：`use_comparison = comparison or config.mode.comparison`
+3. 创建 DatabaseManager 和 ComparisonRecorder
+4. 单元测试 CLI comparison 模式
+5. E2E 测试验证完整流程
+6. 验证数据库记录正确性
 
 ---
 
@@ -202,12 +221,12 @@ Plans:
 | COMP-05 | Phase 2 | ✓ Complete |
 | COMP-06 | Phase 2 | ✓ Complete |
 | COMP-07 | Phase 2 | ✓ Complete |
-| CLI-01 | Phase 3 | Pending |
-| CLI-02 | Phase 3 | Pending |
-| CLI-03 | Phase 3 | Pending |
-| CLI-04 | Phase 3 | Pending |
-| CLI-05 | Phase 3 | Pending |
-| CLI-06 | Phase 3 | Pending |
+| CLI-01 | Phase 3 | Pending — Modified (D-01: search --comparison) |
+| CLI-02 | — | Deferred (D-02: history 命令抛弃) |
+| CLI-03 | — | Deferred (D-02: history 命令抛弃) |
+| CLI-04 | — | Deferred (D-02: history 命令抛弃) |
+| CLI-05 | — | Deferred (D-02: history 命令抛弃) |
+| CLI-06 | — | Deferred (D-02: history 命令抛弃) |
 | ANAL-01 | Phase 4 | Pending |
 | ANAL-02 | Phase 4 | Pending |
 | ANAL-03 | Phase 4 | Pending |
@@ -219,7 +238,8 @@ Plans:
 
 **Coverage:**
 - v1 requirements: 22 total
-- Mapped to phases: 22
+- Mapped to phases: 16 (CLI-02~06 deferred)
+- Deferred: 5 (CLI-02~06 by D-02)
 - Unmapped: 0 ✓
 
 ---
@@ -229,3 +249,4 @@ Plans:
 *Phase 1 complete: 2026-05-06*
 *Phase 2 plans added: 2026-05-09*
 *Phase 2 complete: 2026-05-09*
+*Phase 3 plans added: 2026-05-09*
