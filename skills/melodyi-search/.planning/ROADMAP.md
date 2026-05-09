@@ -56,17 +56,26 @@ Plans:
 
 ## Phase 2: Compare Mode Enhancement
 
-**Goal:** 对比模式完整结果记录与持久化
+**Goal:** 对比模式完整结果记录与持久化，为供应商质量分析提供数据基础
+
+**Status:** Pending
+
+**Plans:** 3 plans in 3 waves
+
+Plans:
+- [ ] 02-01-PLAN.md — ComparisonRecorder 服务实现 (Wave 1) — COMP-01, COMP-03, COMP-04, COMP-05
+- [ ] 02-02-PLAN.md — ExecutionStrategy 修改 (Wave 2) — COMP-02, COMP-07
+- [ ] 02-03-PLAN.md — UnifiedSearchResult 扩展 + 测试覆盖 (Wave 3) — COMP-06
 
 ### Requirements Mapped
 
-- COMP-01: 记录完整搜索结果
-- COMP-02: 持久化到 SQLite
-- COMP-03: 记录请求参数
-- COMP-04: 记录排序位置
-- COMP-05: 记录元数据指标
-- COMP-06: 返回 session_id
-- COMP-07: 修复 daemon thread 写入问题
+- COMP-01: 记录完整搜索结果 (Plan 01)
+- COMP-02: 持久化到 SQLite (Plan 02)
+- COMP-03: 记录请求参数 (Plan 01)
+- COMP-04: 记录排序位置 (Plan 01)
+- COMP-05: 记录元数据指标 (Plan 01)
+- COMP-06: 返回 session_id (Plan 03)
+- COMP-07: 修复 daemon thread 问题 (Plan 02)
 
 ### Success Criteria
 
@@ -74,14 +83,21 @@ Plans:
 2. `search_results` 表包含完整结果（title, url, description 等）
 3. session_id 在响应中返回，可追溯
 
+### Key Decisions (from CONTEXT.md)
+
+- D-01: daemon=False + thread.join(timeout=10)
+- D-02: 每个供应商完成后立即写入数据库
+- D-03: Session ID 格式 YYYYMMDD-HHMMSS-XXXX
+- D-04: 持久化失败时日志记录继续执行
+
 ### Tasks
 
 1. 创建 `melodyi_search/domain/services/comparison_recorder.py`
 2. 修改 `ExecutionStrategy.execute_comparison()` 调用 recorder
-3. 修复 daemon thread：使用 `thread.join(timeout)` 或 asyncio
+3. 修复 daemon thread：使用 `daemon=False` + `thread.join(timeout=10)`
 4. 修改 `UnifiedSearchResult` 添加 `session_id` 字段
 5. 单元测试 `test_comparison_recorder.py`
-6. 成测试验证完整流程
+6. 集成测试验证完整流程
 
 ---
 
@@ -179,13 +195,13 @@ Plans:
 | DB-03 | Phase 1 | ✓ Complete |
 | DB-04 | Phase 1 | ✓ Complete |
 | DB-05 | Phase 1 | ✓ Complete |
-| COMP-01 | Phase 2 | Pending |
-| COMP-02 | Phase 2 | Pending |
-| COMP-03 | Phase 2 | Pending |
-| COMP-04 | Phase 2 | Pending |
-| COMP-05 | Phase 2 | Pending |
-| COMP-06 | Phase 2 | Pending |
-| COMP-07 | Phase 2 | Pending |
+| COMP-01 | Phase 2 | Plan 01 |
+| COMP-02 | Phase 2 | Plan 02 |
+| COMP-03 | Phase 2 | Plan 01 |
+| COMP-04 | Phase 2 | Plan 01 |
+| COMP-05 | Phase 2 | Plan 01 |
+| COMP-06 | Phase 2 | Plan 03 |
+| COMP-07 | Phase 2 | Plan 02 |
 | CLI-01 | Phase 3 | Pending |
 | CLI-02 | Phase 3 | Pending |
 | CLI-03 | Phase 3 | Pending |
@@ -211,3 +227,4 @@ Plans:
 *Roadmap created: 2026-05-04*
 *Phase 1 plans added: 2026-05-06*
 *Phase 1 complete: 2026-05-06*
+*Phase 2 plans added: 2026-05-09*
