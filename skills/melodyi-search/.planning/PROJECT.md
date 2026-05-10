@@ -2,9 +2,9 @@
 
 ## What This Is
 
-一个**供应商质量分析基础设施**，而非简单的搜索聚合工具。通过 Compare 模式同时调用多家搜索供应商，记录完整结果和元数据，用于数据驱动的供应商择优决策。
+一个**供应商质量分析基础设施**，通过 Compare 模式同时调用多家搜索供应商，记录完整结果和元数据到 SQLite，用于数据驱动的供应商择优决策。
 
-为 Agent 提供统一的 `skill.md`，无需关心各 Agent 内置搜索工具的供应商差异。后续将扩展 Fetch 系统采用类似架构。
+为 Agent 提供统一的 `skill.md`，无需关心各 Agent 内置搜索工具的供应商差异。
 
 ## Core Value
 
@@ -12,37 +12,52 @@
 
 ## Requirements
 
-### Validated
+### Validated (v1.0 — 2026-05-10)
 
-现有代码已实现的功能：
+- ✓ **SQLite 持久化基础设施** — DB-01~05
+  - DatabaseConfig 配置模型、DatabaseManager 管理器
+  - comparison_sessions/provider_results/search_results 三张业务表
+  - 六个查询索引（session_id, provider, timestamp, source_domain）
+  
+- ✓ **Compare 模式完整结果记录** — COMP-01~07
+  - 所有供应商完整结果写入数据库（而非仅元数据）
+  - 请求参数记录（query, max_results, time_range, domains 等）
+  - 排序位置记录（rank 字段）
+  - 元数据指标（response_time_ms, results_count, error_type）
+  - daemon thread 修复（daemon=False + join(timeout=10））
 
-- ✓ **多提供商架构** — DDD 分层设计，6 家供应商适配 (MiniMax CN, Tavily, Brave, Exa, SearXNG, Firecrawl)
-- ✓ **统一请求/响应模型** — `UnifiedSearchRequest` → 提供商适配 → `UnifiedSearchResult`
-- ✓ **CLI 命令行工具** — `melodyi-search search` 命令，支持 text/json 输出
-- ✓ **正常执行模式** — 串行执行提供商，成功即返回，失败则回退
-- ✓ **基础 Compare 模式** — 第一个提供商返回，其余后台执行
-- ✓ **配置管理** — YAML 配置 + 环境变量，支持超时、重试设置
-- ✓ **错误处理与指导** — `SearchError.guidance` 为 Agent 提供补救提示
-- ✓ **测试覆盖** — 单元测试 + E2E 集成测试
+- ✓ **CLI comparison 参数** — CLI-01 (modified)
+  - search --comparison 参数覆盖配置开关
+  - 持久化静默执行，输出格式不变
 
-### Active
+- ✓ **集成验证** — INT-01~04
+  - Normal Search 模式不变
+  - skill.md 参数定义不变
+  - 配置向后兼容
+  - 数据库为可选组件
 
-待实现的核心需求：
+### Active (v2 Candidates)
 
-- [ ] **Compare 模式完整结果记录** — 记录所有供应商的搜索结果（标题、URL、摘要、发布时间），而非仅元数据
-- [ ] **SQLite 持久化** — 对比数据存储到本地数据库，支持事后查询分析
-- [ ] **元数据指标记录** — 响应时间、结果数量、错误类型、排序位置
-- [ ] **请求参数记录** — query、time_range、domains 等，确保可复现
-- [ ] **结果排序差异分析** — 记录各家供应商的排序位置，用于相关性对比
-- [ ] **对比数据查询接口** — CLI 命令查询历史对比数据，支持按时间/供应商/域名筛选
-- [ ] **质量分析报告** — 生成供应商质量报告（成功率、响应时间、结果相关性）
+- [ ] **ANAL-01~04: 供应商质量分析报告** — Phase 4 deferred
+  - 成功率、响应时间、结果数统计
+  - 域名覆盖分析
+  - 按域名查看各供应商表现对比
+
+- [ ] **PERF-01~03: 性能优化**
+  - 批量插入优化
+  - 索引优化
+  - 历史数据清理策略
 
 ### Out of Scope
 
-- **Fetch 系统** — 未来独立项目，共用架构思路和存储介质，松耦合
-- **实时监控告警** — 当前聚焦于对比分析，不提供实时监控
-- **多用户/权限管理** — 单用户 CLI 工具
-- **大规模分布式部署** — 小团队数据规模，单机 SQLite
+| Feature | Reason | Status |
+|---------|--------|--------|
+| Fetch 系统 | 未来独立项目，共用架构思路 | Planned |
+| 实时监控告警 | 当前聚焦于对比分析 | — |
+| 多用户/权限 | 单用户 CLI 工具 | — |
+| Web UI | CLI + 数据导出足够 | — |
+| 外部数据库 | SQLite 足够 | — |
+| CLI-02~06 History 命令 | D-02: 抛弃，不实现 | Dropped v1.0 |
 
 ## Context
 
@@ -53,53 +68,46 @@
 - Pydantic V2 数据验证
 - httpx HTTP 客户端
 - pytest 测试框架
+- SQLite 持久化（v1.0 新增）
 
-### 现有代码状态
+### Shipped v1.0 Status
 
-- 6 个搜索提供商已实现
-- Compare 模式仅记录元数据（状态、时间、数量），缺失完整结果记录
-- 无持久化机制，对比数据仅存内存
+- **LOC:** 3,483 Python
+- **Tests:** 446 pytest tests, 全部通过
+- **Timeline:** 27 天 (2026-04-13 → 2026-05-10)
+- **Phases:** 4 phases completed (Phase 4 skipped)
+- **Plans:** 8 plans executed
 
-### 用户需求背景
+### Known Technical Debt
 
-用户预感 Agent 行业对搜索/网页抓取服务的依赖会越来越高，需要：
-1. 分析各供应商服务质量（相关度、时效性、稳定性）
-2. 择优选取供应商
-3. 得到"某域名需特定供应商才能抓取"的信息
-4. 得到"某域名所有供应商都抓不了"的信息，在搜索阶段就排除
+- Phase 4 (Analysis Features) deferred to v2
+- PERF-01~03 性能优化未实现
+
+## Key Decisions
+
+| Decision | Rationale | Outcome | Phase |
+|----------|-----------|---------|-------|
+| SQLite 持久化 | 小团队规模，单文件易管理 | ✓ Good | 01 |
+| Lazy initialization | CLI 启动时自动创建数据库 | ✓ Good | 01 |
+| 连接管理: 每次操作新建连接 | 简化事务边界 | ✓ Good | 01 |
+| daemon=False + join(timeout=10) | 修复后台线程写入丢失 | ✓ Good | 02 |
+| 每个供应商完成后立即写入 | 减少数据丢失风险 | ✓ Good | 02 |
+| Session ID: YYYYMMDD-HHMMSS-XXXX | 可追溯且唯一 | ✓ Good | 02 |
+| CLI 仅 search --comparison | 无独立 compare 命令 | ✓ Good | 03 |
+| History 命令抛弃 | 不实现 CLI-02~06 | ✓ Good | 03 |
+| Compare 静默执行 | 输出格式不变 | ✓ Good | 03 |
+| 数据库为可选组件 | 不影响现有路径 | ✓ Good | 05 |
 
 ## Constraints
 
 - **Python 版本**: >=3.10 — 使用现代 Python 特性
-- **架构**: DDD 分层 — 保持领域层纯净，便于扩展新提供商
+- **架构**: DDD 分层 — 保持领域层纯净
 - **持久化**: SQLite — 小团队规模，单文件易管理
 - **Agent 集成**: skill.md 格式 — 复制到各 Agent 无需修改
-
-## Key Decisions
-
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| SQLite 持久化 | 小团队数据规模，单文件易管理，无需外部部署 | — Pending |
-| Compare 模式后台执行 | 使用 threading.Thread(daemon=True) | ⚠️ Revisit — daemon 线程可能未完成写入 |
-| 错误带 Agent 指导 | `SearchError.guidance` 引导 Agent 补救行为 | ✓ Good |
-| 统一请求模型 | 隔离提供商差异，便于添加新供应商 | ✓ Good |
 
 ## Evolution
 
 此文档在 Phase 过渡和 Milestone 边界时演进。
 
-**After each phase transition** (via `/gsd-transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
-
-**After each milestone** (via `/gsd-complete-milestone`):
-1. Full review of all sections
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
-4. Update Context with current state
-
 ---
-*Last updated: 2026-05-04 after initialization*
+*Last updated: 2026-05-10 after v1.0 milestone completion*
