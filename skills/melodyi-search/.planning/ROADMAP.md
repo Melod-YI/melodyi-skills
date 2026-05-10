@@ -189,7 +189,7 @@ Plans:
 **Plans:** 1 plan in 1 wave
 
 Plans:
-- [ ] 05-01-PLAN.md — 回归测试验证 + 集成点确认 (Wave 1) — INT-01, INT-02, INT-03, INT-04
+- [x] 05-01-PLAN.md — 回归测试验证 + 集成点确认 (Wave 1) — INT-01, INT-02, INT-03, INT-04
 
 ### Requirements Mapped
 
