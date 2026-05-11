@@ -5,8 +5,8 @@ import sqlite3
 import tempfile
 import os
 from pathlib import Path
-from melodyi_search.infrastructure.config.config_schema import DatabaseConfig
-from melodyi_search.infrastructure.database import DatabaseManager
+from melodyi_web.infrastructure.config.config_schema import DatabaseConfig
+from melodyi_web.infrastructure.database import DatabaseManager
 
 
 class TestDatabaseManagerInit:

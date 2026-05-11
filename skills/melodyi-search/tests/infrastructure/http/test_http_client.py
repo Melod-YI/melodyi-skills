@@ -1,7 +1,7 @@
 """HTTP 客户端测试"""
 
 import pytest
-from melodyi_search.infrastructure.http.http_client import HttpClient
+from melodyi_web.infrastructure.http.http_client import HttpClient
 
 
 class TestHttpClient:

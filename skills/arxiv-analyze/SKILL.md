@@ -66,7 +66,8 @@ When you encounter references in the TeX source, process them inline:
 **For PNG/JPG/WebP files:**
 1. Note the figure context from surrounding text and `\caption{}`
 2. Construct a focused prompt based on what information you need
-3. Call an available image understanding tool with the file path and prompt
+3. Call an available image understanding tool with the file path and prompt。除非已经有图像理解的调用结果的txt文件了，此时你就直接读取txt文件的内容。
+4. 把输出的结果记录下来，保存到图片旁，名称预期对应的`.txt`文件中。
 
 **For PDF files:**
 1. Use Read tool on the PDF to extract text labels (axis, legend, caption)

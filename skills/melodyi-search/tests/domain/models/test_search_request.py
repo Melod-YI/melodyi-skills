@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import datetime, timedelta
-from melodyi_search.domain.models.search_request import TimeRange, UnifiedSearchRequest
+from melodyi_web.domain.models.search_request import TimeRange, UnifiedSearchRequest
 
 
 class TestTimeRange:

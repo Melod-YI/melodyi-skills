@@ -20,6 +20,8 @@ current_workspace/
 └── ...
 ```
 
+**Session ID 管理**：在当前对话上下文中记住各项目的 session ID，用于后续继续分析。不持久化到文件，确保新 session 可以干净地重新开始。
+
 ## 使用场景
 
 ### 场景一：添加新的git项目
@@ -41,14 +43,19 @@ CLAUDE_CODE_GIT_BASH_PATH="C:\Applications\Scoop\apps\git\current\bin\bash.exe" 
 
 ### 场景三：对比分析
 
-如果客户询问要对比或分析某个特性，例如“对比下各个项目是如何做xxxx的”、“各家在xxx方面有什么异同”、“分析下各个项目xxx”等场景。你需要到各个项目目录下执行命令，拉起一个claude code来在各个项目里进行分析。
+如果客户询问要对比或分析某个特性，例如”对比下各个项目是如何做xxxx的”、”各家在xxx方面有什么异同”、”分析下各个项目xxx”等场景。你需要到各个项目目录下执行命令，拉起一个claude code来在各个项目里进行分析。
 
 **需要注意，你不应该使用子agent，而是使用bash的方式实现，以确保子agent的系统提示词、工具与默认的claude code一致。**
 
-命令示例
+命令示例（使用 JSON 输出获取 session ID）：
 ```bash
-CLAUDE_CODE_GIT_BASH_PATH="C:\Applications\Scoop\apps\git\current\bin\bash.exe" powershell -Command "cd '项目路径'; claude -p '用户想确认的问题'"
+CLAUDE_CODE_GIT_BASH_PATH=”C:\Applications\Scoop\apps\git\current\bin\bash.exe” powershell -Command “cd '项目路径'; claude -p --output-format json '用户想确认的问题'”
 ```
+
+**关键步骤**：
+1. 使用 `--output-format json` 参数执行命令
+2. 从 JSON 输出中提取 `session_id` 字段
+3. **在当前对话上下文中记录各项目的 session ID**（用于后续继续分析）
 
 你应该优化用户的原始问题提示词，与用户确认理解是否一致后，用优化的提示词去让claude分析。
 
@@ -58,15 +65,22 @@ CLAUDE_CODE_GIT_BASH_PATH="C:\Applications\Scoop\apps\git\current\bin\bash.exe" 
 
 ### 场景四：进一步分析
 
-如果客户对你的问题还有疑问，提出了更具体的问题，那么需要让claude继续分析。你需要在调用claude的时候添加 -c 指令来恢复上一次的对话内容。
+如果客户对你的问题还有疑问，提出了更具体的问题，那么需要让claude继续分析。
+
+**重要：使用 session ID 恢复会话，而不是 `-c`**
+
+之前使用 `-c` 命令来继续上一次的对话存在风险：如果用户同时在其他窗口对相同目录运行 claude code，可能会恢复到错误的会话。因此改用 session ID 来精确恢复：
+
+1. 从当前对话上下文中获取之前记录的 session ID
+2. 使用 `-r <session-id>` 参数恢复特定会话
 
 这些问题可能指定了只在某些项目内运行。那么你只需要在用户指定的项目内执行命令。
 
-示例命令
+示例命令：
 ```bash
-CLAUDE_CODE_GIT_BASH_PATH="C:\Applications\Scoop\apps\git\current\bin\bash.exe" powershell -Command "cd '项目路径'; claude -p -c '用户想确认的问题'"
+CLAUDE_CODE_GIT_BASH_PATH="C:\Applications\Scoop\apps\git\current\bin\bash.exe" powershell -Command "cd '项目路径'; claude -p --output-format json -r 'session-id' '用户想确认的问题'"
 ```
 
 你依旧需要等各个项目返回后，汇总整理再呈现给用户。
 
-**需要注意，如果当前时一个新对话的第一个问题，或者用户问了一个和之前无关的问题，那么应该是场景二而不是场景三**
+**需要注意，如果当前是一个新对话的第一个问题，或者用户问了一个和之前无关的问题，那么应该是场景三而不是场景四。此时应该重新执行分析并生成新的 session ID，而不是恢复之前的会话。**

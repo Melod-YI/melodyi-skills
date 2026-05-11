@@ -7,10 +7,10 @@ import pytest
 from click.testing import CliRunner
 from unittest.mock import patch, MagicMock
 
-from melodyi_search.application.cli import cli, main
-from melodyi_search.domain.models.search_result import UnifiedSearchResult, SearchResultItem, SearchError
-from melodyi_search.domain.models.provider_config import ProviderConfig
-from melodyi_search.infrastructure.config.config_schema import Config, ModeConfig, FallbackConfig
+from melodyi_web.application.cli import cli, main
+from melodyi_web.domain.models.search_result import UnifiedSearchResult, SearchResultItem, SearchError
+from melodyi_web.domain.models.provider_config import ProviderConfig
+from melodyi_web.infrastructure.config.config_schema import Config, ModeConfig, FallbackConfig
 
 
 class TestCliHelp:
@@ -21,7 +21,7 @@ class TestCliHelp:
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
-        assert "melodyi-search" in result.output
+        assert "melodyi-web" in result.output
         assert "search" in result.output
         assert "config" in result.output
 
@@ -55,14 +55,14 @@ class TestVersionOption:
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "melodyi-search" in result.output
+        assert "melodyi-web" in result.output
         assert "0.1.0" in result.output
 
 
 class TestConfigShow:
     """config show 命令测试"""
 
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.load_config")
     def test_config_show_text(self, mock_load_config):
         """测试 config show 文本输出"""
         mock_config = Config(
@@ -87,7 +87,7 @@ class TestConfigShow:
         assert "***" in result.output  # API key masked
         assert "10000" in result.output
 
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.load_config")
     def test_config_show_json(self, mock_load_config):
         """测试 config show JSON 输出"""
         mock_config = Config(
@@ -116,10 +116,10 @@ class TestConfigShow:
 class TestSearchCommand:
     """search 命令测试"""
 
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_basic(
         self,
         mock_load_config,
@@ -174,10 +174,10 @@ class TestSearchCommand:
         assert "tavily" in result.output
         assert "Test Result" in result.output
 
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_with_options(
         self,
         mock_load_config,
@@ -235,10 +235,10 @@ class TestSearchCommand:
         assert '"provider"' in result.output
         assert '"tavily"' in result.output
 
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_with_include_domains(
         self,
         mock_load_config,
@@ -291,10 +291,10 @@ class TestSearchCommand:
 
         assert result.exit_code == 0
 
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_with_provider(
         self,
         mock_load_config,
@@ -342,7 +342,7 @@ class TestSearchCommand:
         assert result.exit_code == 0
         assert "brave" in result.output
 
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_invalid_provider(self, mock_load_config):
         """测试无效提供商"""
         mock_config = Config(
@@ -368,10 +368,10 @@ class TestSearchCommand:
         assert result.exit_code == 1
         assert "错误" in result.output or "invalid-provider" in result.output
 
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_comparison_mode(
         self,
         mock_load_config,
@@ -420,12 +420,12 @@ class TestSearchCommand:
         assert result.exit_code == 0
         mock_strategy.execute_comparison.assert_called_once()
 
-    @patch("melodyi_search.application.cli.ComparisonRecorder")
-    @patch("melodyi_search.application.cli.DatabaseManager")
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ComparisonRecorder")
+    @patch("melodyi_web.application.cli.DatabaseManager")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_comparison_mode_with_config_enabled(
         self,
         mock_load_config,
@@ -493,12 +493,12 @@ class TestSearchCommand:
         assert len(call_args[0]) >= 3  # providers, request, recorder
         assert call_args[0][2] == mock_recorder  # 第三个参数是 recorder
 
-    @patch("melodyi_search.application.cli.ComparisonRecorder")
-    @patch("melodyi_search.application.cli.DatabaseManager")
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ComparisonRecorder")
+    @patch("melodyi_web.application.cli.DatabaseManager")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_comparison_mode_override_config(
         self,
         mock_load_config,
@@ -560,12 +560,12 @@ class TestSearchCommand:
         assert len(call_args[0]) >= 3  # providers, request, recorder
         assert call_args[0][2] == mock_recorder
 
-    @patch("melodyi_search.application.cli.ComparisonRecorder")
-    @patch("melodyi_search.application.cli.DatabaseManager")
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ComparisonRecorder")
+    @patch("melodyi_web.application.cli.DatabaseManager")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_normal_mode_with_config_enabled(
         self,
         mock_load_config,
@@ -619,10 +619,10 @@ class TestSearchCommand:
         mock_strategy.execute_comparison.assert_called_once()
         mock_strategy.execute_normal.assert_not_called()
 
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_normal_mode_with_config_disabled(
         self,
         mock_load_config,
@@ -669,10 +669,10 @@ class TestSearchCommand:
         mock_strategy.execute_normal.assert_called_once()
         mock_strategy.execute_comparison.assert_not_called()
 
-    @patch("melodyi_search.application.cli.ProviderFactory")
-    @patch("melodyi_search.application.cli.ParameterAdapter")
-    @patch("melodyi_search.application.cli.ExecutionStrategy")
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_error(
         self,
         mock_load_config,
@@ -721,7 +721,7 @@ class TestSearchCommand:
         assert result.exit_code == 0  # Error is still a successful CLI execution
         assert "搜索失败" in result.output or "error" in result.output.lower()
 
-    @patch("melodyi_search.application.cli.load_config")
+    @patch("melodyi_web.application.cli.load_config")
     def test_search_config_not_found(self, mock_load_config):
         """测试配置文件不存在"""
         mock_load_config.side_effect = FileNotFoundError("Config not found")
@@ -735,7 +735,7 @@ class TestSearchCommand:
 class TestMainFunction:
     """main 函数测试"""
 
-    @patch("melodyi_search.application.cli.cli")
+    @patch("melodyi_web.application.cli.cli")
     def test_main_calls_cli(self, mock_cli):
         """测试 main 函数调用 cli"""
         main()

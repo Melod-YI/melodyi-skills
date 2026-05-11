@@ -1,4 +1,4 @@
-# melodyi-search Project Instructions
+# melodyi-web Project Instructions
 
 此项目使用 Get Shit Done (GSD) 工作流管理。
 

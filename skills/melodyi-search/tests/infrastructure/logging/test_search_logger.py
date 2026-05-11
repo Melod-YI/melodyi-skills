@@ -4,7 +4,7 @@ import pytest
 import tempfile
 import os
 from datetime import datetime
-from melodyi_search.infrastructure.logging.search_logger import SearchLogger
+from melodyi_web.infrastructure.logging.search_logger import SearchLogger
 
 
 class TestSearchLogger:

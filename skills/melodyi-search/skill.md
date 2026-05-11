@@ -1,5 +1,5 @@
 ---
-name: melodyi-search
+name: melodyi-web
 description: 搜索网络获取知识截止日期之外的信息
 ---
 

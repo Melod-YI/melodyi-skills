@@ -2,9 +2,9 @@
 
 import pytest
 from unittest.mock import Mock
-from melodyi_search.domain.models.search_request import UnifiedSearchRequest, TimeRange
-from melodyi_search.domain.services.parameter_adapter import ParameterAdapter
-from melodyi_search.providers.base_provider import BaseProvider
+from melodyi_web.domain.models.search_request import UnifiedSearchRequest, TimeRange
+from melodyi_web.domain.services.parameter_adapter import ParameterAdapter
+from melodyi_web.providers.search.base_provider import BaseProvider
 
 
 class TestParameterAdapter:

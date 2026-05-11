@@ -15,7 +15,7 @@ progress:
 
 # STATE.md
 
-**Project:** melodyi-search Compare Enhancement
+**Project:** melodyi-web Compare Enhancement
 **Status:** v1.0 milestone complete
 **Last updated:** 2026-05-09
 

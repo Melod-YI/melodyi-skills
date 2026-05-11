@@ -1,7 +1,7 @@
 """提供商配置测试"""
 
 import pytest
-from melodyi_search.domain.models.provider_config import ProviderConfig
+from melodyi_web.domain.models.provider_config import ProviderConfig
 
 
 class TestProviderConfig:

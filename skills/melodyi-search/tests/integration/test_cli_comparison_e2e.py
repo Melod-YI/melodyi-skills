@@ -21,13 +21,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from melodyi_search.application.cli import cli
-from melodyi_search.domain.models.search_result import (
+from melodyi_web.application.cli import cli
+from melodyi_web.domain.models.search_result import (
     UnifiedSearchResult,
     SearchResultItem,
 )
-from melodyi_search.domain.models.provider_config import ProviderConfig
-from melodyi_search.infrastructure.config.config_schema import (
+from melodyi_web.domain.models.provider_config import ProviderConfig
+from melodyi_web.infrastructure.config.config_schema import (
     Config,
     ModeConfig,
     FallbackConfig,
@@ -73,7 +73,7 @@ class TestCLIComparisonE2E:
         - search_results 表有记录
         - session_id 格式正确
         """
-        from melodyi_search.infrastructure.database.database_manager import (
+        from melodyi_web.infrastructure.database.database_manager import (
             DatabaseManager,
         )
 
@@ -101,12 +101,12 @@ class TestCLIComparisonE2E:
         db_manager.init_database()
 
         # 使用嵌套 patch，确保 CLI 运行时所有 mock 都生效
-        with patch("melodyi_search.application.cli.load_config") as mock_load_config, \
-             patch("melodyi_search.application.cli.ProviderFactory") as mock_factory, \
-             patch("melodyi_search.application.cli.ParameterAdapter") as mock_adapter, \
-             patch("melodyi_search.application.cli.ExecutionStrategy") as mock_strategy_class, \
-             patch("melodyi_search.application.cli.DatabaseManager") as mock_db_class, \
-             patch("melodyi_search.application.cli.ComparisonRecorder") as mock_recorder_class:
+        with patch("melodyi_web.application.cli.load_config") as mock_load_config, \
+             patch("melodyi_web.application.cli.ProviderFactory") as mock_factory, \
+             patch("melodyi_web.application.cli.ParameterAdapter") as mock_adapter, \
+             patch("melodyi_web.application.cli.ExecutionStrategy") as mock_strategy_class, \
+             patch("melodyi_web.application.cli.DatabaseManager") as mock_db_class, \
+             patch("melodyi_web.application.cli.ComparisonRecorder") as mock_recorder_class:
 
             mock_load_config.return_value = mock_config
 
@@ -168,12 +168,12 @@ class TestCLIComparisonE2E:
         )
 
         # 使用嵌套 patch
-        with patch("melodyi_search.application.cli.load_config") as mock_load_config, \
-             patch("melodyi_search.application.cli.ProviderFactory") as mock_factory, \
-             patch("melodyi_search.application.cli.ParameterAdapter") as mock_adapter, \
-             patch("melodyi_search.application.cli.ExecutionStrategy") as mock_strategy_class, \
-             patch("melodyi_search.application.cli.DatabaseManager") as mock_db_class, \
-             patch("melodyi_search.application.cli.ComparisonRecorder") as mock_recorder_class:
+        with patch("melodyi_web.application.cli.load_config") as mock_load_config, \
+             patch("melodyi_web.application.cli.ProviderFactory") as mock_factory, \
+             patch("melodyi_web.application.cli.ParameterAdapter") as mock_adapter, \
+             patch("melodyi_web.application.cli.ExecutionStrategy") as mock_strategy_class, \
+             patch("melodyi_web.application.cli.DatabaseManager") as mock_db_class, \
+             patch("melodyi_web.application.cli.ComparisonRecorder") as mock_recorder_class:
 
             mock_load_config.return_value = mock_config
 
@@ -238,12 +238,12 @@ class TestCLIComparisonE2E:
         )
 
         # 使用嵌套 patch
-        with patch("melodyi_search.application.cli.load_config") as mock_load_config, \
-             patch("melodyi_search.application.cli.ProviderFactory") as mock_factory, \
-             patch("melodyi_search.application.cli.ParameterAdapter") as mock_adapter, \
-             patch("melodyi_search.application.cli.ExecutionStrategy") as mock_strategy_class, \
-             patch("melodyi_search.application.cli.DatabaseManager") as mock_db_class, \
-             patch("melodyi_search.application.cli.ComparisonRecorder") as mock_recorder_class:
+        with patch("melodyi_web.application.cli.load_config") as mock_load_config, \
+             patch("melodyi_web.application.cli.ProviderFactory") as mock_factory, \
+             patch("melodyi_web.application.cli.ParameterAdapter") as mock_adapter, \
+             patch("melodyi_web.application.cli.ExecutionStrategy") as mock_strategy_class, \
+             patch("melodyi_web.application.cli.DatabaseManager") as mock_db_class, \
+             patch("melodyi_web.application.cli.ComparisonRecorder") as mock_recorder_class:
 
             mock_load_config.return_value = mock_config
 
@@ -329,12 +329,12 @@ class TestCLIComparisonE2E:
         runner = CliRunner()
 
         # Comparison 模式测试 - 使用嵌套 patch
-        with patch("melodyi_search.application.cli.load_config") as mock_load_config, \
-             patch("melodyi_search.application.cli.ProviderFactory") as mock_factory, \
-             patch("melodyi_search.application.cli.ParameterAdapter") as mock_adapter, \
-             patch("melodyi_search.application.cli.ExecutionStrategy") as mock_strategy_class, \
-             patch("melodyi_search.application.cli.DatabaseManager") as mock_db_class, \
-             patch("melodyi_search.application.cli.ComparisonRecorder") as mock_recorder_class:
+        with patch("melodyi_web.application.cli.load_config") as mock_load_config, \
+             patch("melodyi_web.application.cli.ProviderFactory") as mock_factory, \
+             patch("melodyi_web.application.cli.ParameterAdapter") as mock_adapter, \
+             patch("melodyi_web.application.cli.ExecutionStrategy") as mock_strategy_class, \
+             patch("melodyi_web.application.cli.DatabaseManager") as mock_db_class, \
+             patch("melodyi_web.application.cli.ComparisonRecorder") as mock_recorder_class:
 
             mock_load_config.return_value = mock_config
 
@@ -360,10 +360,10 @@ class TestCLIComparisonE2E:
             ).output
 
         # Normal 模式测试 - 使用嵌套 patch
-        with patch("melodyi_search.application.cli.load_config") as mock_load_config, \
-             patch("melodyi_search.application.cli.ProviderFactory") as mock_factory, \
-             patch("melodyi_search.application.cli.ParameterAdapter") as mock_adapter, \
-             patch("melodyi_search.application.cli.ExecutionStrategy") as mock_strategy_class:
+        with patch("melodyi_web.application.cli.load_config") as mock_load_config, \
+             patch("melodyi_web.application.cli.ProviderFactory") as mock_factory, \
+             patch("melodyi_web.application.cli.ParameterAdapter") as mock_adapter, \
+             patch("melodyi_web.application.cli.ExecutionStrategy") as mock_strategy_class:
 
             mock_load_config.return_value = mock_config
 
@@ -418,12 +418,12 @@ class TestCLIComparisonE2E:
         )
 
         # 使用嵌套 patch
-        with patch("melodyi_search.application.cli.load_config") as mock_load, \
-             patch("melodyi_search.application.cli.ProviderFactory") as mock_factory, \
-             patch("melodyi_search.application.cli.ParameterAdapter") as mock_adapter, \
-             patch("melodyi_search.application.cli.ExecutionStrategy") as mock_strategy_class, \
-             patch("melodyi_search.application.cli.DatabaseManager") as mock_db_class, \
-             patch("melodyi_search.application.cli.ComparisonRecorder") as mock_recorder_class:
+        with patch("melodyi_web.application.cli.load_config") as mock_load, \
+             patch("melodyi_web.application.cli.ProviderFactory") as mock_factory, \
+             patch("melodyi_web.application.cli.ParameterAdapter") as mock_adapter, \
+             patch("melodyi_web.application.cli.ExecutionStrategy") as mock_strategy_class, \
+             patch("melodyi_web.application.cli.DatabaseManager") as mock_db_class, \
+             patch("melodyi_web.application.cli.ComparisonRecorder") as mock_recorder_class:
 
             mock_load.return_value = mock_config_disabled
 
@@ -481,12 +481,12 @@ class TestCLIComparisonE2E:
         )
 
         # 使用嵌套 patch
-        with patch("melodyi_search.application.cli.load_config") as mock_load, \
-             patch("melodyi_search.application.cli.ProviderFactory") as mock_factory, \
-             patch("melodyi_search.application.cli.ParameterAdapter") as mock_adapter, \
-             patch("melodyi_search.application.cli.ExecutionStrategy") as mock_strategy_class, \
-             patch("melodyi_search.application.cli.DatabaseManager") as mock_db_class, \
-             patch("melodyi_search.application.cli.ComparisonRecorder") as mock_recorder_class:
+        with patch("melodyi_web.application.cli.load_config") as mock_load, \
+             patch("melodyi_web.application.cli.ProviderFactory") as mock_factory, \
+             patch("melodyi_web.application.cli.ParameterAdapter") as mock_adapter, \
+             patch("melodyi_web.application.cli.ExecutionStrategy") as mock_strategy_class, \
+             patch("melodyi_web.application.cli.DatabaseManager") as mock_db_class, \
+             patch("melodyi_web.application.cli.ComparisonRecorder") as mock_recorder_class:
 
             mock_load.return_value = mock_config_enabled
 
@@ -564,12 +564,12 @@ class TestCLIComparisonDatabaseIntegration:
         )
 
         # 使用嵌套 patch
-        with patch("melodyi_search.application.cli.load_config") as mock_load, \
-             patch("melodyi_search.application.cli.ProviderFactory") as mock_factory, \
-             patch("melodyi_search.application.cli.ParameterAdapter") as mock_adapter, \
-             patch("melodyi_search.application.cli.ExecutionStrategy") as mock_strategy_class, \
-             patch("melodyi_search.application.cli.DatabaseManager") as mock_db_class, \
-             patch("melodyi_search.application.cli.ComparisonRecorder") as mock_recorder_class:
+        with patch("melodyi_web.application.cli.load_config") as mock_load, \
+             patch("melodyi_web.application.cli.ProviderFactory") as mock_factory, \
+             patch("melodyi_web.application.cli.ParameterAdapter") as mock_adapter, \
+             patch("melodyi_web.application.cli.ExecutionStrategy") as mock_strategy_class, \
+             patch("melodyi_web.application.cli.DatabaseManager") as mock_db_class, \
+             patch("melodyi_web.application.cli.ComparisonRecorder") as mock_recorder_class:
 
             mock_load.return_value = mock_config
 
@@ -617,7 +617,7 @@ class TestCLIComparisonDatabaseIntegration:
         - 表结构初始化
         - 数据写入
         """
-        from melodyi_search.infrastructure.database.database_manager import (
+        from melodyi_web.infrastructure.database.database_manager import (
             DatabaseManager,
         )
 

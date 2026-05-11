@@ -6,12 +6,12 @@ import threading
 import time
 import pytest
 from unittest.mock import MagicMock, Mock
-from melodyi_search.domain.services.execution_strategy import ExecutionStrategy
-from melodyi_search.domain.services.comparison_recorder import ComparisonRecorder
-from melodyi_search.infrastructure.database.database_manager import DatabaseManager
-from melodyi_search.infrastructure.config.config_schema import DatabaseConfig
-from melodyi_search.providers.base_provider import BaseProvider, ProviderSearchRequest, ProviderSearchResult
-from melodyi_search.domain.models.search_result import SearchResultItem
+from melodyi_web.domain.services.execution_strategy import ExecutionStrategy
+from melodyi_web.domain.services.comparison_recorder import ComparisonRecorder
+from melodyi_web.infrastructure.database.database_manager import DatabaseManager
+from melodyi_web.infrastructure.config.config_schema import DatabaseConfig
+from melodyi_web.providers.search.base_provider import BaseProvider, ProviderSearchRequest, ProviderSearchResult
+from melodyi_web.domain.models.search_result import SearchResultItem
 
 
 class MockProvider(BaseProvider):

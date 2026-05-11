@@ -1,7 +1,7 @@
 """错误类型和指导测试"""
 
 import pytest
-from melodyi_search.domain.models.error import (
+from melodyi_web.domain.models.error import (
     ErrorType,
     ERROR_GUIDANCE,
     create_error_with_guidance

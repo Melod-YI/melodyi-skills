@@ -1,14 +1,14 @@
 """ProviderFactory 单元测试"""
 
 import pytest
-from melodyi_search.domain.models.provider_config import ProviderConfig
-from melodyi_search.domain.services.provider_factory import ProviderFactory
-from melodyi_search.providers.minimax_cn_provider import MiniMaxCNProvider
-from melodyi_search.providers.tavily_provider import TavilyProvider
-from melodyi_search.providers.brave_provider import BraveProvider
-from melodyi_search.providers.exa_provider import ExaProvider
-from melodyi_search.providers.searxng_provider import SearXNGProvider
-from melodyi_search.providers.firecrawl_provider import FirecrawlProvider
+from melodyi_web.domain.models.provider_config import ProviderConfig
+from melodyi_web.domain.services.provider_factory import ProviderFactory
+from melodyi_web.providers.search.minimax_cn_provider import MiniMaxCNProvider
+from melodyi_web.providers.search.tavily_provider import TavilyProvider
+from melodyi_web.providers.search.brave_provider import BraveProvider
+from melodyi_web.providers.search.exa_provider import ExaProvider
+from melodyi_web.providers.search.searxng_provider import SearXNGProvider
+from melodyi_web.providers.search.firecrawl_provider import FirecrawlProvider
 
 
 class TestProviderFactory:

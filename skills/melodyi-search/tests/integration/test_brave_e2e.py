@@ -13,9 +13,9 @@
 import os
 import pytest
 
-from melodyi_search.domain.models.search_request import TimeRange
-from melodyi_search.providers.brave_provider import BraveProvider
-from melodyi_search.providers.base_provider import ProviderSearchRequest
+from melodyi_web.domain.models.search_request import TimeRange
+from melodyi_web.providers.search.brave_provider import BraveProvider
+from melodyi_web.providers.search.base_provider import ProviderSearchRequest
 
 
 # 从环境变量获取 API 密钥

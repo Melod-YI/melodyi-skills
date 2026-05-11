@@ -3,7 +3,7 @@
 import pytest
 import tempfile
 import os
-from melodyi_search.infrastructure.config.config_loader import load_config, resolve_env_var
+from melodyi_web.infrastructure.config.config_loader import load_config, resolve_env_var
 
 
 class TestResolveEnvVar:

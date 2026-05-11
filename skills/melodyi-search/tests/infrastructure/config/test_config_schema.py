@@ -1,7 +1,7 @@
 """Config 配置模型测试"""
 
 import pytest
-from melodyi_search.infrastructure.config.config_schema import Config, ModeConfig, FallbackConfig
+from melodyi_web.infrastructure.config.config_schema import Config, ModeConfig, FallbackConfig
 
 
 class TestConfig:

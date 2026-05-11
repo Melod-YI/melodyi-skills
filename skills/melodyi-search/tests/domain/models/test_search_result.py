@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import datetime
-from melodyi_search.domain.models.search_result import SearchResultItem, UnifiedSearchResult, SearchError
+from melodyi_web.domain.models.search_result import SearchResultItem, UnifiedSearchResult, SearchError
 
 
 class TestSearchResultItem:

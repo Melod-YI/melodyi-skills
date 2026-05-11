@@ -1,4 +1,4 @@
-# ROADMAP: melodyi-search Compare Enhancement
+# ROADMAP: melodyi-web Compare Enhancement
 
 **Created:** 2026-05-04
 **Last updated:** 2026-05-10 (v1.0 milestone complete)

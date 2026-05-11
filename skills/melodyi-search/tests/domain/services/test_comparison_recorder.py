@@ -4,10 +4,10 @@ import pytest
 import tempfile
 import os
 from datetime import datetime
-from melodyi_search.domain.services.comparison_recorder import ComparisonRecorder, generate_session_id
-from melodyi_search.infrastructure.database.database_manager import DatabaseManager
-from melodyi_search.infrastructure.config.config_schema import DatabaseConfig
-from melodyi_search.providers.base_provider import ProviderSearchRequest, ProviderSearchResult, SearchResultItem
+from melodyi_web.domain.services.comparison_recorder import ComparisonRecorder, generate_session_id
+from melodyi_web.infrastructure.database.database_manager import DatabaseManager
+from melodyi_web.infrastructure.config.config_schema import DatabaseConfig
+from melodyi_web.providers.search.base_provider import ProviderSearchRequest, ProviderSearchResult, SearchResultItem
 
 
 class TestComparisonRecorder:
