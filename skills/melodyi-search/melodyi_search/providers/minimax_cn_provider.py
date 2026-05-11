@@ -135,6 +135,9 @@ class MiniMaxCNProvider(BaseProvider):
                     request.exclude_domains,
                 )
 
+                # 截断到用户指定的 max_results
+                results = results[:request.max_results]
+
                 return ProviderSearchResult(
                     provider=self.name,
                     results=results,

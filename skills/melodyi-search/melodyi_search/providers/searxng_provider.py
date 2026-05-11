@@ -130,6 +130,9 @@ class SearXNGProvider(BaseProvider):
                 response_data = response.json()
                 results = self._parse_response(response_data)
 
+                # 截断到用户指定的 max_results
+                results = results[:request.max_results]
+
                 return ProviderSearchResult(
                     provider=self.name,
                     results=results,
