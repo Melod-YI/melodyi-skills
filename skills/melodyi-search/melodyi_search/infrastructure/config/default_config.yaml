@@ -26,11 +26,11 @@ providers:
 
 mode:
   comparison: true
-  log_dir: ./logs
+  log_dir: ${HOME}/.melodyi-search/logs
 
 fallback:
   retry_count: 2
   retry_delay_ms: 1000
 
 database:
-  database_path: ./data/compare.db
+  database_path: ${HOME}/.melodyi-search/data/compare.db
