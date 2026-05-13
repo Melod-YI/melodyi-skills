@@ -5,6 +5,8 @@ from melodyi_web.domain.models.search_result import SearchResultItem, UnifiedSea
 from melodyi_web.domain.models.error import ErrorType, ERROR_GUIDANCE, create_error_with_guidance
 from melodyi_web.domain.models.provider_config import ProviderConfig, PROVIDER_NAMES
 from melodyi_web.domain.models.fetch_request import FetchRequest
+from melodyi_web.domain.models.fetch_result import FetchResult, FetchError
+from melodyi_web.domain.models.fetch_provider_config import FetchProviderConfig, FETCH_PROVIDER_NAMES
 
 __all__ = [
     "TimeRange",
@@ -18,4 +20,8 @@ __all__ = [
     "ProviderConfig",
     "PROVIDER_NAMES",
     "FetchRequest",
+    "FetchResult",
+    "FetchError",
+    "FetchProviderConfig",
+    "FETCH_PROVIDER_NAMES",
 ]
