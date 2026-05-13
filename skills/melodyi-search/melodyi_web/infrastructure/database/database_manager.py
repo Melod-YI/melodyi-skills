@@ -136,8 +136,36 @@ class DatabaseManager:
             )
         """)
 
+        # fetch_sessions 表
+        # 存储 fetch 对比执行的元数据
+        self._logger.debug("Creating table: fetch_sessions")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS fetch_sessions (
+                session_id TEXT PRIMARY KEY,
+                url TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        # fetch_provider_results 表
+        # 存储 fetch 供应商执行结果
+        self._logger.debug("Creating table: fetch_provider_results")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS fetch_provider_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                response_time_ms INTEGER NOT NULL,
+                content_length INTEGER NOT NULL,
+                title TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (session_id) REFERENCES fetch_sessions(session_id)
+            )
+        """)
+
         conn.commit()
-        self._logger.info("Tables created: comparison_sessions, provider_results, search_results")
+        self._logger.info("Tables created: comparison_sessions, provider_results, search_results, fetch_sessions, fetch_provider_results")
 
     def _create_indexes(self, conn: sqlite3.Connection) -> None:
         """创建索引

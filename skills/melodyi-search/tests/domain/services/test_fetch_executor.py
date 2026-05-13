@@ -364,3 +364,202 @@ class TestFetchExecutionStrategyResultConversion:
 
         assert result.is_success()
         assert result.has_content()
+
+
+class TestFetchExecutionStrategyComparison:
+    """Fetch 对比模式测试"""
+
+    def test_execute_comparison_no_providers(self):
+        """测试无供应商情况"""
+        strategy = FetchExecutionStrategy()
+        request = ProviderFetchRequest(url="https://example.com")
+        mock_recorder = Mock()
+        result = strategy.execute_comparison([], request, mock_recorder)
+
+        assert result.error is not None
+        assert result.error.error_type == "NO_PROVIDERS"
+
+    def test_execute_comparison_single_provider_success(self):
+        """测试单供应商成功"""
+        mock_provider = MockFetchProvider(
+            name="test-provider",
+            should_succeed=True,
+            title="Test Title",
+            content="Test content"
+        )
+
+        strategy = FetchExecutionStrategy()
+        request = ProviderFetchRequest(url="https://example.com")
+        mock_recorder = Mock()
+        mock_recorder.generate_session_id.return_value = "20260513-120000-abcd"
+
+        result = strategy.execute_comparison([mock_provider], request, mock_recorder)
+
+        assert result.error is None
+        assert result.provider == "test-provider"
+        assert result.content == "Test content"
+        assert result.title == "Test Title"
+        assert result.session_id == "20260513-120000-abcd"
+        # 验证 recorder 被调用
+        mock_recorder.write_fetch_session.assert_called_once()
+        mock_recorder.write_fetch_provider_result.assert_called_once()
+
+    def test_execute_comparison_single_provider_failure(self):
+        """测试单供应商失败"""
+        mock_provider = MockFetchProvider(
+            name="fail-provider",
+            should_succeed=False,
+            error_message="Provider failed"
+        )
+
+        strategy = FetchExecutionStrategy()
+        request = ProviderFetchRequest(url="https://example.com")
+        mock_recorder = Mock()
+        mock_recorder.generate_session_id.return_value = "20260513-120000-abcd"
+
+        result = strategy.execute_comparison([mock_provider], request, mock_recorder)
+
+        assert result.error is not None
+        assert result.session_id == "20260513-120000-abcd"
+        # 验证 recorder 被调用
+        mock_recorder.write_fetch_session.assert_called_once()
+        mock_recorder.write_fetch_provider_result.assert_called_once()
+
+    def test_execute_comparison_multiple_providers(self):
+        """测试多供应商对比执行"""
+        mock_provider1 = MockFetchProvider(
+            name="provider1",
+            should_succeed=True,
+            title="Title 1",
+            content="Content 1",
+            response_time_ms=100
+        )
+
+        mock_provider2 = MockFetchProvider(
+            name="provider2",
+            should_succeed=True,
+            title="Title 2",
+            content="Content 2",
+            response_time_ms=200
+        )
+
+        strategy = FetchExecutionStrategy()
+        request = ProviderFetchRequest(url="https://example.com")
+        mock_recorder = Mock()
+        # 配置 generate_session_id 返回正确格式
+        mock_recorder.generate_session_id.return_value = "20260513-120000-abcd"
+
+        result = strategy.execute_comparison([mock_provider1, mock_provider2], request, mock_recorder)
+
+        # 返回第一个供应商结果
+        assert result.error is None
+        assert result.provider == "provider1"
+        assert result.session_id == "20260513-120000-abcd"
+
+        # 验证 recorder 被调用
+        mock_recorder.write_fetch_session.assert_called_once()
+        # 第一个供应商结果立即写入，后台供应商也会写入
+        assert mock_recorder.write_fetch_provider_result.call_count >= 1
+
+    def test_execute_comparison_session_id_format(self):
+        """测试 session_id 格式"""
+        mock_provider = MockFetchProvider(
+            name="test-provider",
+            should_succeed=True,
+            content="Test content"
+        )
+
+        strategy = FetchExecutionStrategy()
+        request = ProviderFetchRequest(url="https://example.com")
+        mock_recorder = Mock()
+        # 配置 generate_session_id 返回正确格式
+        mock_recorder.generate_session_id.return_value = "20260513-120000-abcd"
+
+        result = strategy.execute_comparison([mock_provider], request, mock_recorder)
+
+        # session_id 应该存在且格式正确
+        assert result.session_id is not None
+        # 验证格式: YYYYMMDD-HHMMSS-XXXX
+        import re
+        assert re.match(r"\d{8}-\d{6}-[0-9a-f]{4}", result.session_id)
+
+    def test_execute_comparison_url_recorded(self):
+        """测试 URL 被正确记录"""
+        mock_provider = MockFetchProvider(
+            name="test-provider",
+            should_succeed=True,
+            content="Test content"
+        )
+
+        strategy = FetchExecutionStrategy()
+        request = ProviderFetchRequest(url="https://example.com/test/page")
+        mock_recorder = Mock()
+        mock_recorder.generate_session_id.return_value = "20260513-120000-abcd"
+
+        result = strategy.execute_comparison([mock_provider], request, mock_recorder)
+
+        assert result.url == "https://example.com/test/page"
+        # 验证 write_fetch_session 被调用时传入了正确的 request
+        call_args = mock_recorder.write_fetch_session.call_args
+        assert call_args[0][1].url == "https://example.com/test/page"
+
+    def test_execute_comparison_callback_on_first_provider(self):
+        """测试回调在第一个供应商完成时被调用"""
+        mock_provider = MockFetchProvider(
+            name="test-provider",
+            should_succeed=True,
+            content="Test content"
+        )
+
+        strategy = FetchExecutionStrategy()
+        request = ProviderFetchRequest(url="https://example.com")
+        mock_recorder = Mock()
+        mock_recorder.generate_session_id.return_value = "20260513-120000-abcd"
+
+        callback_results = []
+
+        def callback(result):
+            callback_results.append(result)
+
+        result = strategy.execute_comparison([mock_provider], request, mock_recorder, callback)
+
+        assert len(callback_results) == 1
+        assert callback_results[0].provider == "test-provider"
+
+    def test_execute_comparison_response_time_preserved(self):
+        """测试响应时间被保留"""
+        mock_provider = MockFetchProvider(
+            name="test-provider",
+            should_succeed=True,
+            content="Test content",
+            response_time_ms=350
+        )
+
+        strategy = FetchExecutionStrategy()
+        request = ProviderFetchRequest(url="https://example.com")
+        mock_recorder = Mock()
+        mock_recorder.generate_session_id.return_value = "20260513-120000-abcd"
+
+        result = strategy.execute_comparison([mock_provider], request, mock_recorder)
+
+        assert result.response_time_ms == 350
+
+    def test_execute_comparison_provider_exception(self):
+        """测试第一个供应商异常情况"""
+        mock_provider = MockFetchProvider(
+            name="exception-provider",
+            raise_exception=True,
+            error_message="Network timeout"
+        )
+
+        strategy = FetchExecutionStrategy()
+        request = ProviderFetchRequest(url="https://example.com")
+        mock_recorder = Mock()
+        mock_recorder.generate_session_id.return_value = "20260513-120000-abcd"
+
+        result = strategy.execute_comparison([mock_provider], request, mock_recorder)
+
+        assert result.error is not None
+        assert result.error.error_type == "FIRST_PROVIDER_EXCEPTION"
+        assert "Network timeout" in result.error.original_message
+        assert result.session_id == "20260513-120000-abcd"

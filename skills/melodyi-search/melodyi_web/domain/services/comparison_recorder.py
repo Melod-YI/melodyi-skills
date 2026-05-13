@@ -12,6 +12,10 @@ from melodyi_web.providers.search.base_provider import (
     ProviderSearchResult,
     SearchResultItem,
 )
+from melodyi_web.providers.fetch.base_fetch_provider import (
+    ProviderFetchRequest,
+    ProviderFetchResult,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -179,3 +183,64 @@ class ComparisonRecorder:
             if conn:
                 conn.close()
                 logger.debug(f"Connection closed for write_search_results: {session_id}/{provider}")
+
+    def write_fetch_session(self, session_id: str, request: ProviderFetchRequest) -> None:
+        """写入 fetch session 元数据
+
+        D-02: 单条 autocommit
+        D-04: 失败时日志记录继续执行
+
+        Args:
+            session_id: 会话 ID
+            request: fetch 请求参数
+        """
+        conn = None
+        try:
+            conn = self._db.get_connection()
+            logger.debug(f"Connection opened for write_fetch_session: {session_id}")
+            conn.execute(
+                """INSERT INTO fetch_sessions
+                   (session_id, url, created_at)
+                   VALUES (?, ?, ?)""",
+                (session_id, request.url, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            )
+            conn.commit()
+            logger.info(f"Fetch session written: {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to write fetch session {session_id}: {e}")
+            # D-04: 不抛出异常，继续执行
+        finally:
+            if conn:
+                conn.close()
+                logger.debug(f"Connection closed for write_fetch_session: {session_id}")
+
+    def write_fetch_provider_result(self, session_id: str, result: ProviderFetchResult) -> None:
+        """写入 fetch provider 结果
+
+        D-02: 单条 autocommit
+        D-04: 失败时日志记录继续执行
+
+        Args:
+            session_id: 会话 ID
+            result: 供应商执行结果
+        """
+        conn = None
+        try:
+            conn = self._db.get_connection()
+            logger.debug(f"Connection opened for write_fetch_provider_result: {session_id}/{result.provider}")
+            conn.execute(
+                """INSERT INTO fetch_provider_results
+                   (session_id, provider, response_time_ms, content_length, title, error, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (session_id, result.provider, result.response_time_ms, len(result.content),
+                 result.title, result.error, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            )
+            conn.commit()
+            logger.info(f"Fetch provider result written: {session_id}/{result.provider}")
+        except Exception as e:
+            logger.error(f"Failed to write fetch provider result {session_id}/{result.provider}: {e}")
+            # D-04: 不抛出异常，继续执行
+        finally:
+            if conn:
+                conn.close()
+                logger.debug(f"Connection closed for write_fetch_provider_result: {session_id}/{result.provider}")

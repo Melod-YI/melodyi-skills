@@ -7,6 +7,7 @@
 
 import logging
 import threading
+import uuid
 from typing import List, Callable, Optional
 
 from melodyi_web.domain.models.fetch_result import FetchResult, FetchError
@@ -98,9 +99,6 @@ class FetchExecutionStrategy:
         第一个供应商正常执行并返回，剩余供应商在后台线程执行并记录日志。
         使用 threading.Thread(daemon=False) 实现后台执行，并等待线程完成。
 
-        注意：此方法需要 ComparisonRecorder 的 write_fetch_session 和
-        write_fetch_provider_result 方法，这些方法将在 Task 11 中实现。
-
         Args:
             providers: 供应商列表
             request: 统一的抓取请求
@@ -115,14 +113,67 @@ class FetchExecutionStrategy:
         - D-02: 每个供应商完成后立即写入数据库
         - COMP-06: 返回包含 session_id 的结果
         """
-        # TODO: Task 11 后实现
-        # 需要 ComparisonRecorder 的以下方法：
-        # - write_fetch_session(session_id, request)
-        # - write_fetch_provider_result(session_id, result)
+        if not providers:
+            return self._create_empty_error_result("NO_PROVIDERS", "没有可用的供应商")
 
-        logger.warning("[FetchComparison] Comparison mode not yet implemented, using normal mode")
-        result = self.execute_normal(providers, request, on_provider_complete)
-        return result
+        # 生成 session_id
+        session_id = recorder.generate_session_id()
+        logger.info(f"[FetchComparison] Starting comparison session: {session_id}")
+
+        # 写入 session 元数据
+        recorder.write_fetch_session(session_id, request)
+
+        # 执行第一个供应商
+        first_provider = providers[0]
+        logger.debug(f"[FetchComparison] Executing first provider: {first_provider.name}")
+
+        try:
+            first_result = first_provider.fetch(request)
+
+            # 回调通知
+            if on_provider_complete:
+                on_provider_complete(first_result)
+
+            # 写入第一个供应商结果
+            recorder.write_fetch_provider_result(session_id, first_result)
+
+            # 转换为统一结果
+            unified_result = self._convert_to_unified_result(first_result)
+            unified_result.session_id = session_id
+
+            if first_result.error:
+                logger.warning(f"[FetchComparison] First provider {first_provider.name} failed: {first_result.error}")
+            else:
+                logger.info(
+                    f"[FetchComparison] First provider {first_provider.name} succeeded: "
+                    f"{first_result.response_time_ms}ms"
+                )
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"[FetchComparison] First provider {first_provider.name} raised exception: {error_msg}")
+            # 创建异常结果
+            unified_result = self._create_empty_error_result("FIRST_PROVIDER_EXCEPTION", error_msg)
+            unified_result.session_id = session_id
+            first_result = None
+
+        # 后台执行剩余供应商
+        remaining_providers = providers[1:]
+        if remaining_providers:
+            logger.debug(f"[FetchComparison] Starting background thread for {len(remaining_providers)} providers")
+            background_thread = threading.Thread(
+                target=self._execute_background_providers,
+                args=(remaining_providers, request, recorder, session_id, on_provider_complete),
+                daemon=False
+            )
+            background_thread.start()
+
+            # D-01: 等待后台线程（最多10秒）
+            background_thread.join(timeout=10)
+            if background_thread.is_alive():
+                logger.warning("[FetchComparison] Background thread still running after 10s timeout")
+
+        return unified_result
 
     def _execute_background_providers(
         self,
@@ -145,7 +196,6 @@ class FetchExecutionStrategy:
         - D-02: 每个供应商完成后立即写入数据库
         - D-04: 失败时日志记录继续执行
         """
-        # TODO: Task 11 后实现
         for provider in providers:
             provider_name = provider.name
             try:
@@ -153,7 +203,7 @@ class FetchExecutionStrategy:
                 result = provider.fetch(request)
 
                 # D-02: 立即写入数据库
-                # recorder.write_fetch_provider_result(session_id, result)
+                recorder.write_fetch_provider_result(session_id, result)
 
                 # 回调通知
                 if on_provider_complete:
