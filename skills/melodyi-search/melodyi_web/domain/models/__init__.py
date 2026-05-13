@@ -13,7 +13,7 @@ __all__ = [
     "UnifiedSearchResult",
     "SearchError",
     "ErrorType",
-    "ERROR_GUIDNANCE",
+    "ERROR_GUIDANCE",
     "create_error_with_guidance",
     "ProviderConfig",
     "PROVIDER_NAMES",
