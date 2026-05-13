@@ -1,4 +1,13 @@
-# melodyi_web/providers/fetch/__init__.py
-"""Fetch 提供商实现 - 阶段三填充"""
+"""Fetch 供应商模块"""
 
-__all__ = []
+from melodyi_web.providers.fetch.base_fetch_provider import (
+    BaseFetchProvider,
+    ProviderFetchRequest,
+    ProviderFetchResult,
+)
+
+__all__ = [
+    "BaseFetchProvider",
+    "ProviderFetchRequest",
+    "ProviderFetchResult",
+]
