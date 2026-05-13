@@ -14,12 +14,17 @@ import click
 
 from melodyi_web import __version__
 from melodyi_web.domain.models.search_request import UnifiedSearchRequest, TimeRange
+from melodyi_web.domain.models.fetch_request import FetchRequest
+from melodyi_web.domain.models.fetch_provider_config import FetchProviderConfig
 from melodyi_web.domain.services.execution_strategy import ExecutionStrategy
 from melodyi_web.domain.services.parameter_adapter import ParameterAdapter
 from melodyi_web.domain.services.provider_factory import ProviderFactory
+from melodyi_web.domain.services.fetch_provider_factory import FetchProviderFactory
+from melodyi_web.domain.services.fetch_executor import FetchExecutionStrategy
 from melodyi_web.infrastructure.config.config_loader import load_config
 from melodyi_web.domain.services.comparison_recorder import ComparisonRecorder
 from melodyi_web.infrastructure.database.database_manager import DatabaseManager
+from melodyi_web.providers.fetch.base_fetch_provider import ProviderFetchRequest
 
 
 @click.group()
@@ -191,6 +196,104 @@ def search(
         sys.exit(1)
 
 
+@cli.command()
+@click.argument("url", required=True)
+@click.option(
+    "--provider",
+    "-p",
+    type=str,
+    default=None,
+    help="指定使用的供应商",
+)
+@click.option(
+    "--comparison",
+    "-c",
+    is_flag=True,
+    default=False,
+    help="比对模式：第一个供应商立即返回，其余后台执行",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="输出格式: text 或 json (默认: text)",
+)
+@click.option(
+    "--config",
+    "-f",
+    "config_path",
+    type=click.Path(exists=True),
+    default=None,
+    help="配置文件路径",
+)
+def fetch(
+    url: str,
+    provider: Optional[str],
+    comparison: bool,
+    output: str,
+    config_path: Optional[str],
+):
+    """执行网页抓取
+
+    URL 是目标网址，必填参数。
+
+    示例:
+        melodyi-web fetch https://example.com
+        melodyi-web fetch https://example.com --provider jina-reader
+        melodyi-web fetch https://example.com --comparison
+    """
+    try:
+        # 1. 加载配置
+        config = load_config(config_path)
+
+        # 2. 构建抓取请求
+        fetch_request = FetchRequest(url=url, preferred_provider=provider)
+
+        # 3. 获取供应商配置
+        fetch_configs = getattr(config, 'fetch_providers', None)
+        if fetch_configs:
+            provider_configs = fetch_configs
+        elif provider:
+            provider_config = FetchProviderConfig(name=provider)
+            provider_configs = [provider_config]
+        else:
+            # 默认供应商顺序：jina-reader 优先（无需 API Key）
+            provider_configs = [
+                FetchProviderConfig(name="jina-reader"),
+                FetchProviderConfig(name="markdown-new"),
+            ]
+
+        # 4. 创建供应商实例
+        providers = FetchProviderFactory.create_all(provider_configs)
+
+        # 5. 执行抓取
+        provider_request = ProviderFetchRequest(url=url)
+
+        strategy = FetchExecutionStrategy()
+        if comparison:
+            db_manager = DatabaseManager(config.database)
+            try:
+                db_manager.init_database()
+                recorder = ComparisonRecorder(db_manager)
+                result = strategy.execute_comparison(providers, provider_request, recorder)
+            finally:
+                if hasattr(db_manager, 'close'):
+                    db_manager.close()
+        else:
+            result = strategy.execute_normal(providers, provider_request)
+
+        # 6. 输出结果
+        if output == "json":
+            _output_fetch_json(result)
+        else:
+            _output_fetch_text(result)
+
+    except Exception as e:
+        click.echo(f"抓取失败: {e}", err=True)
+        sys.exit(1)
+
+
 @cli.group()
 def config():
     """配置管理命令"""
@@ -286,6 +389,27 @@ def _output_json(result):
     # D-06: 移除 session_id，仅保留数据库记录
     result_dict.pop("session_id", None)
     click.echo(json.dumps(result_dict, indent=2, ensure_ascii=False, default=str))
+
+
+def _output_fetch_text(result):
+    """文本格式输出 fetch 结果"""
+    if result.error:
+        click.echo(f"抓取失败 [{result.provider}]: {result.error.original_message}")
+        click.echo(f"提示: {result.error.guidance}")
+        return
+
+    click.echo(f"供应商: {result.provider}")
+    click.echo(f"响应时间: {result.response_time_ms}ms")
+    if result.title:
+        click.echo(f"标题: {result.title}")
+    click.echo(f"\n{result.content}")
+
+
+def _output_fetch_json(result):
+    """JSON 格式输出 fetch 结果"""
+    result_dict = result.model_dump(mode="python")
+    result_dict.pop("session_id", None)
+    click.echo(json.dumps(result_dict, indent=2, ensure_ascii=False))
 
 
 def main():
