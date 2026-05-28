@@ -6,3 +6,5 @@ docs/
 *.egg-info/
 .env
 *副本/
+.pytest_cache/
+archive/
