@@ -65,13 +65,44 @@ melodyi_web/
 
 **核心服务:**
 - `ExecutionStrategy` (正常/比对模式) → `domain/services/execution_strategy.py`
+- `FetchExecutionStrategy` (fetch 侧同模式) → `domain/services/fetch_executor.py`
 - `ParameterAdapter` (统一参数适配) → `domain/services/parameter_adapter.py`
-- `ProviderFactory` → `domain/services/provider_factory.py`
+- `ProviderFactory` / `FetchProviderFactory` → `domain/services/`
+
+## 关键设计决策
+
+| ID | 决策 |
+|----|------|
+| D-01 | 比对模式后台线程 `daemon=False` + `thread.join(timeout=10)` |
+| D-02 | 每个提供商结果完成后立即写入 SQLite（单条 autocommit） |
+| D-03 | Session ID 格式: `YYYYMMDD-HHMMSS-XXXX` |
+| D-04 | 持久化失败只记 ERROR 日志，**不抛异常**，执行继续 |
+| D-05 | CLI `--comparison` 覆盖配置文件 `mode.comparison` |
+
+**比对模式执行流**: 第一个提供商同步执行并立即返回结果；其余提供商在后台线程执行用于数据收集。所有结果通过 `ComparisonRecorder` 写入 SQLite。
+
+**提供商错误处理模式**: 所有提供商的 `search()`/`fetch()` 方法内部捕获全部异常，返回 `error=...` 结果字符串，**永不向上抛出异常**。策略层收集错误，全部失败时返回 `ALL_PROVIDERS_FAILED`。
+
+**错误指导系统**: `error.py` 中 `ErrorType` 枚举映射到中文 `guidance` 文本，指导 AI Agent 如何恢复（如"检查 API Key"、"等待重试"、"系统已切换提供商"）。
+
+## 提供商注意事项
+
+- **MiniMax CN**: API 不支持时间过滤，通过注入中文关键词（"今天 最新"）模拟；域名过滤通过 `urlparse` 后处理
+- **FetchProviderFactory**: 存在遗留名称映射 `"jina-reader"` → `"jina"`
+- **Config 向后兼容**: 旧 `providers` 字段自动迁移到 `search_providers`（使用 `object.__setattr__` 绕过 Pydantic frozen）
+
+## 测试模式
+
+- **无 conftest.py**，无共享 fixture — 每个测试类自行定义
+- 单元测试大量使用 `unittest.mock`（`MagicMock`、`patch`、`Mock`）
+- 集成测试位于 `tests/integration/`，命名 `*_e2e.py`，需真实 API Key
+- 比对/持久化测试使用 `tempfile.NamedTemporaryFile` 创建临时 SQLite
+- 构建工具: Hatchling（`pyproject.toml`）
 
 ## 开发规范
 
-- Python >=3.10，Pydantic V2
+- Python >=3.10，Pydantic V2（使用 `model_validator`、`field_validator`）
 - 中文文档字符串
 - 测试镜像源码结构 (`tests/` 目录)
-- 集成测试位于 `tests/integration/`
 - 错误携带 `guidance` 字段指导 Agent 行为
+- 所有提供商方法为同步调用（无 async/await），`HttpClient` 封装同步 `httpx.Client`
