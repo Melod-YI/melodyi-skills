@@ -154,3 +154,29 @@ class TestBuildPlanTv:
         mkdirs = [op.path for op in result.operations if op.type == "mkdir"]
         # 检查文件夹名本身（basename）不含非法字符；完整路径在 Windows 上含盘符冒号 C:
         assert all(":" not in p.replace("\\", "/").split("/")[-1] for p in mkdirs)
+
+
+from melodyi_filebot.models import CandidateSummary
+from melodyi_filebot.planner import build_plan_movie
+
+
+class TestBuildPlanMovie:
+    """build_plan_movie 测试"""
+
+    def test_standard_movie(self, tmp_path):
+        src = tmp_path / "源"
+        src.mkdir()
+        f = src / "某电影.2020.1080p.mkv"
+        f.write_bytes(b"x")
+        cand = CandidateSummary(
+            tmdb_id=123, title="某电影", original_title="Mov", year=2020,
+            overview_length=50, media_type="movie",
+        )
+        result = build_plan_movie(
+            files=[str(f)], movie=cand, dest_root=str(tmp_path / "dest")
+        )
+        mkdirs = [op.path for op in result.operations if op.type == "mkdir"]
+        assert any("某电影 (2020) [tmdbid-123]" in p for p in mkdirs)
+        moves = [op for op in result.operations if op.type == "move"]
+        assert len(moves) == 1
+        assert "某电影 (2020).mkv" in moves[0].path

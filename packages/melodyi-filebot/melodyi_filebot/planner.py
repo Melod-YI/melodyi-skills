@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from melodyi_filebot.models import BuildPlanResult, PlanOperation, ShowSummary
+from melodyi_filebot.models import BuildPlanResult, CandidateSummary, PlanOperation, ShowSummary
 
 logger = logging.getLogger(__name__)
 
@@ -182,4 +182,37 @@ def build_plan_tv(
         "构建剧集计划完成: show=%s, 操作数=%d, 警告数=%d",
         show.title, len(operations), len(warnings),
     )
+    return BuildPlanResult(operations=operations, spec_applied="standard", warnings=warnings)
+
+
+def build_plan_movie(
+    files: List[str], movie: CandidateSummary, dest_root: str
+) -> BuildPlanResult:
+    """构建电影重命名计划（P0 不含 NFO）
+
+    Args:
+        files: 源视频文件路径列表（取第一个为正片，其余作 warning）
+        movie: TMDB 电影候选摘要
+        dest_root: 目标媒体根目录
+
+    Returns:
+        BuildPlanResult
+    """
+    logger.info("构建电影计划开始: movie=%s, 文件数=%d", movie.title, len(files))
+    operations: List[PlanOperation] = []
+    warnings: List[str] = []
+
+    year = f" ({movie.year})" if movie.year else ""
+    folder = _sanitize(f"{movie.title}{year} [tmdbid-{movie.tmdb_id}]")
+    movie_dir = f"{dest_root}/{folder}"
+    operations.append(PlanOperation(type="mkdir", path=movie_dir))
+
+    target_name = _sanitize(f"{movie.title}{year}") + (Path(files[0]).suffix if files else ".mkv")
+    target = f"{movie_dir}/{target_name}"
+    operations.append(PlanOperation(type="move", source=files[0], path=target))
+    for extra in files[1:]:
+        warnings.append(f"电影存在多个视频文件，已忽略: {extra}")
+        logger.warning("电影多文件忽略: %s", extra)
+
+    logger.info("构建电影计划完成: movie=%s", movie.title)
     return BuildPlanResult(operations=operations, spec_applied="standard", warnings=warnings)
