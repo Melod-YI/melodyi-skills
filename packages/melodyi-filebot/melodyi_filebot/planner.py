@@ -130,7 +130,7 @@ def _episode_filename(
     if episode_end:
         base += f"-E{episode_end:02d}"
     if part:
-        base += f"-part{part}"
+        base += f"-part-{part}"
     return base + ext
 
 
@@ -207,7 +207,13 @@ def build_plan_movie(
     movie_dir = f"{dest_root}/{folder}"
     operations.append(PlanOperation(type="mkdir", path=movie_dir))
 
-    target_name = _sanitize(f"{movie.title}{year}") + (Path(files[0]).suffix if files else ".mkv")
+    if not files:
+        warnings.append("未找到视频文件")
+        logger.warning("未找到视频文件: movie=%s", movie.title)
+        logger.info("构建电影计划完成（无文件）: movie=%s", movie.title)
+        return BuildPlanResult(operations=operations, spec_applied="standard", warnings=warnings)
+
+    target_name = _sanitize(f"{movie.title}{year}") + Path(files[0]).suffix
     target = f"{movie_dir}/{target_name}"
     operations.append(PlanOperation(type="move", source=files[0], path=target))
     for extra in files[1:]:

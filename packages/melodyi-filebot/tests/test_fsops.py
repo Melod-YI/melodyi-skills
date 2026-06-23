@@ -35,6 +35,14 @@ class TestScan:
         with pytest.raises(FileNotFoundError):
             fsops.scan_video_files(str(tmp_path / "nope"))
 
+    def test_scan_sorted(self, tmp_path):
+        """扫描结果应为升序，保证计划稳定"""
+        (tmp_path / "b.mkv").write_bytes(b"x")
+        (tmp_path / "a.mkv").write_bytes(b"x")
+        (tmp_path / "c.mkv").write_bytes(b"x")
+        files = fsops.scan_video_files(str(tmp_path))
+        assert files == sorted(files)
+
 
 from melodyi_filebot.models import BuildPlanResult, PlanOperation
 

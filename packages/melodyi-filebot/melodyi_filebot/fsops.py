@@ -32,11 +32,11 @@ def scan_video_files(root: str) -> List[str]:
     root_path = Path(root)
     if not root_path.exists():
         raise FileNotFoundError(f"目录不存在: {root}")
-    files = [
+    files = sorted(
         str(p)
         for p in root_path.rglob("*")
         if p.is_file() and p.suffix.lower() in VIDEO_EXTS
-    ]
+    )
     logger.info("扫描完成: root=%s, 视频文件数=%d", root, len(files))
     return files
 

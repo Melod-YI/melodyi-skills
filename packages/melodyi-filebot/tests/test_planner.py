@@ -155,6 +155,20 @@ class TestBuildPlanTv:
         # 检查文件夹名本身（basename）不含非法字符；完整路径在 Windows 上含盘符冒号 C:
         assert all(":" not in p.replace("\\", "/").split("/")[-1] for p in mkdirs)
 
+    def test_part_in_generated_filename(self, tmp_path):
+        """part 段应生成 S01E01-part-1 文件名（part 与编号间有连字符）"""
+        show_dir = tmp_path / "src"
+        show_dir.mkdir()
+        f1 = show_dir / "Series A S01E01-part-1.mkv"
+        f1.write_bytes(b"x")
+        result = build_plan_tv(
+            files=[str(f1)], show=_show_summary(),
+            dest_root=str(tmp_path / "dest"), language="zh-CN",
+        )
+        moves = [op for op in result.operations if op.type == "move"]
+        assert len(moves) == 1
+        assert "S01E01-part-1" in moves[0].path
+
 
 from melodyi_filebot.models import CandidateSummary
 from melodyi_filebot.planner import build_plan_movie
@@ -180,3 +194,15 @@ class TestBuildPlanMovie:
         moves = [op for op in result.operations if op.type == "move"]
         assert len(moves) == 1
         assert "某电影 (2020).mkv" in moves[0].path
+
+    def test_empty_files_warning(self, tmp_path):
+        """空文件列表不应崩溃，且不应产生 move 操作"""
+        cand = CandidateSummary(
+            tmdb_id=123, title="某电影", original_title="Mov", year=2020,
+            overview_length=50, media_type="movie",
+        )
+        result = build_plan_movie(files=[], movie=cand, dest_root=str(tmp_path / "dest"))
+        assert all(op.type != "move" for op in result.operations)
+        # 仍创建 movie 目录
+        assert any(op.type == "mkdir" for op in result.operations)
+        assert any("未找到视频文件" in w for w in result.warnings)
