@@ -26,25 +26,26 @@
 
 ## 2. 整体架构与目录布局
 
-运行形态：**SKILL.md + Python 辅助 CLI**。SKILL.md 指导 agent 编排流程与确认时机；Python CLI 封装 API 调用、摘要压缩、计划构建、NFO 生成、文件操作。agent 只处理摘要与决策，完整元数据不进上下文。
+运行形态：**SKILL.md + Python 辅助 CLI**。SKILL.md 指导 agent 编排流程与确认时机；Python CLI 封装 API 调用、摘要压缩、计划构建、NFO 生成、文件操作。agent 只处理摘要与决策，完整元数据不进上下文。遵循 monorepo 约定：CLI 代码放 `packages/melodyi-filebot/`，轻量 `SKILL.md` 放 `skills/melodyi-filebot/`。
 
 ```
-skills/melodyi-filebot/
-├── SKILL.md                  # Claude 运行时指令
-├── CLAUDE.md                 # 开发指南（可选）
-├── src/
-│   └── melodyi_filebot/      # Python 包
-│       ├── cli.py            # Click 入口：search/fetch-summary/build-plan/execute-plan/undo
-│       ├── tmdb.py           # TMDB 调用（初期 import tmdbsimple，后续或自实现）
-│       ├── bangumi.py        # Bangumi v0 调用（P1 引入）
-│       ├── summarize.py      # 原始元数据 → 进上下文的摘要
-│       ├── planner.py        # 构建重命名/整理/NFO 计划
-│       ├── nfo.py            # NFO 生成（P2 引入，P2 前重新设计）
-│       └── fsops.py          # 文件扫描、重命名、移动、事务日志、undo
-├── docs/
-│   ├── superpowers/specs/    # 本设计文档
-│   └── search-heuristics.md  # 知识沉淀文档（随 skill 发布，可累积）
+packages/melodyi-filebot/          # CLI 包（pip install -e 安装）
+├── pyproject.toml
+├── melodyi_filebot/               # Python 包
+│   ├── cli.py            # Click 入口：search/fetch-summary/build-plan/execute-plan/undo
+│   ├── tmdb.py           # TMDB 调用（初期 import tmdbsimple，后续或自实现）
+│   ├── bangumi.py        # Bangumi v0 调用（P1 引入）
+│   ├── summarize.py      # 原始元数据 → 进上下文的摘要
+│   ├── planner.py        # 构建重命名/整理/NFO 计划
+│   ├── nfo.py            # NFO 生成（P2 引入，P2 前重新设计）
+│   └── fsops.py          # 文件扫描、重命名、移动、事务日志、undo
 └── tests/
+
+skills/melodyi-filebot/            # 轻量 skill（sync-skills.sh 同步）
+├── SKILL.md
+├── docs/
+│   └── search-heuristics.md  # 知识沉淀文档（随 skill 发布，可累积）
+└── specs/                    # 本设计文档
 ```
 
 ### 职责边界

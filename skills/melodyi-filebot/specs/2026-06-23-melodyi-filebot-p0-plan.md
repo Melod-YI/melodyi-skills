@@ -14,9 +14,12 @@
 
 ## 文件结构
 
+> **目录规范（2026-06-23 更新，遵循 monorepo 新约定）：**
+> 业务代码（需安装的 CLI 包）位于 `packages/melodyi-filebot/`；`skills/melodyi-filebot/` 仅保留轻量 `SKILL.md` + `docs/` + `specs/` + `原始需求.md`。
+> 本计划后续所有出现 `skills/melodyi-filebot/<pyproject|melodyi_filebot|tests|.env.example>` 的路径，均实际位于 `packages/melodyi-filebot/`。
+
 ```
-skills/melodyi-filebot/
-├── SKILL.md                         # Claude 运行时指令
+packages/melodyi-filebot/          # CLI 包（pip install -e 安装）
 ├── pyproject.toml                   # hatchling 打包，entry point: melodyi-filebot
 ├── .env.example                     # TMDB_API_KEY 示例
 ├── melodyi_filebot/
@@ -29,8 +32,6 @@ skills/melodyi-filebot/
 │   ├── planner.py                   # 文件名 S/E 解析 + build_plan
 │   ├── fsops.py                     # 目录扫描 / execute_plan / 事务日志 / undo
 │   └── cli.py                       # Click 入口
-├── docs/
-│   └── search-heuristics.md         # 知识沉淀文档（含 Lycoris 案例）
 └── tests/
     ├── __init__.py
     ├── conftest.py                  # fixtures：tmdb 响应快照、临时媒体目录
@@ -41,6 +42,13 @@ skills/melodyi-filebot/
     ├── test_planner.py
     ├── test_fsops.py
     └── test_cli.py
+
+skills/melodyi-filebot/             # 轻量 skill（sync-skills.sh 同步）
+├── SKILL.md                         # Claude 运行时指令（Task15）
+├── docs/
+│   └── search-heuristics.md         # 知识沉淀文档（含 Lycoris 案例，Task14）
+├── specs/                           # 设计与计划文档
+└── 原始需求.md
 ```
 
 **职责边界：**
@@ -56,14 +64,14 @@ skills/melodyi-filebot/
 ## Task 1: 项目脚手架与配置读取
 
 **Files:**
-- Create: `skills/melodyi-filebot/pyproject.toml`
-- Create: `skills/melodyi-filebot/.env.example`
-- Create: `skills/melodyi-filebot/melodyi_filebot/__init__.py`
-- Create: `skills/melodyi-filebot/melodyi_filebot/__main__.py`
-- Create: `skills/melodyi-filebot/melodyi_filebot/config.py`
-- Create: `skills/melodyi-filebot/tests/__init__.py`
-- Create: `skills/melodyi-filebot/tests/conftest.py`
-- Create: `skills/melodyi-filebot/tests/test_config.py`
+- Create: `packages/melodyi-filebot/pyproject.toml`
+- Create: `packages/melodyi-filebot/.env.example`
+- Create: `packages/melodyi-filebot/melodyi_filebot/__init__.py`
+- Create: `packages/melodyi-filebot/melodyi_filebot/__main__.py`
+- Create: `packages/melodyi-filebot/melodyi_filebot/config.py`
+- Create: `packages/melodyi-filebot/tests/__init__.py`
+- Create: `packages/melodyi-filebot/tests/conftest.py`
+- Create: `packages/melodyi-filebot/tests/test_config.py`
 
 - [ ] **Step 1: 写 pyproject.toml**
 
@@ -269,14 +277,14 @@ class TestLoadTmdbApiKey:
 
 - [ ] **Step 9: 安装并运行测试，验证失败**
 
-Run: `cd skills/melodyi-filebot && pip install -e ".[dev]" && pytest tests/test_config.py -v`
+Run: `cd packages/melodyi-filebot && pip install -e ".[dev]" && pytest tests/test_config.py -v`
 Expected: PASS（config 无外部依赖，应直接通过；若 import 失败则 FAIL）
 
 - [ ] **Step 10: 提交**
 
 ```bash
 cd C:/workspace/melodyi-skills
-git add skills/melodyi-filebot/pyproject.toml skills/melodyi-filebot/.env.example skills/melodyi-filebot/melodyi_filebot/ skills/melodyi-filebot/tests/
+git add packages/melodyi-filebot/pyproject.toml packages/melodyi-filebot/.env.example packages/melodyi-filebot/melodyi_filebot/ packages/melodyi-filebot/tests/
 git commit -m "feat(melodyi-filebot): 初始化项目脚手架与配置读取"
 ```
 

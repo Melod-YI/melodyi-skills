@@ -1,0 +1,30 @@
+[project]
+name = "melodyi-filebot"
+version = "0.1.0"
+description = "基于 TMDB 的影视批量重命名与目录整理工具"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "pydantic>=2.0",
+    "httpx>=0.25",
+    "tmdbsimple>=2.7",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+melodyi-filebot = "melodyi_filebot.cli:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["melodyi_filebot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
