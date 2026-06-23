@@ -101,3 +101,37 @@ def execute_plan(
         logger.info("事务日志已写入: %s", snapshot_path)
     logger.info("执行计划完成")
     return snapshot
+
+
+def undo(snapshot: dict) -> None:
+    """按事务日志逆序回放逆操作
+
+    Args:
+        snapshot: execute_plan 返回的事务日志 dict
+    """
+    ops = snapshot.get("operations", [])
+    logger.info("回滚开始: 逆操作数=%d", len(ops))
+    for op in ops:
+        if op["type"] == "move":
+            # 逆操作：把目标移回源
+            shutil.move(op["path"], op["source"])
+            logger.info("回滚移动: %s -> %s", op["path"], op["source"])
+        elif op["type"] == "mkdir":
+            # 仅当目录为空时删除
+            p = Path(op["path"])
+            try:
+                p.rmdir()
+                logger.info("回滚删除目录: %s", op["path"])
+            except OSError:
+                logger.info("目录非空，保留: %s", op["path"])
+    logger.info("回滚完成")
+
+
+def undo_from_file(snapshot_path: str) -> None:
+    """从事务日志文件回滚
+
+    Args:
+        snapshot_path: 事务日志文件路径
+    """
+    data = json.loads(Path(snapshot_path).read_text(encoding="utf-8"))
+    undo(data)

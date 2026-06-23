@@ -121,3 +121,43 @@ class TestExecutePlan:
         )
         with pytest.raises(FileNotFoundError):
             fsops.execute_plan(plan, dry_run=True)
+
+
+class TestUndo:
+    """undo 测试"""
+
+    def test_undo_restores_original(self, tmp_path):
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "a.mkv"
+        f.write_bytes(b"x")
+        dest = tmp_path / "dest" / "Show"
+        plan = BuildPlanResult(
+            operations=[
+                PlanOperation(type="mkdir", path=str(dest)),
+                PlanOperation(type="move", source=str(f), path=str(dest / "a.mkv")),
+            ]
+        )
+        snapshot = fsops.execute_plan(plan, dry_run=False, snapshot_path=str(tmp_path / "snap.json"))
+        assert not f.exists()
+        fsops.undo(snapshot)
+        # 回滚后源文件恢复，目标目录被清理（move 逆操作）
+        assert f.exists()
+        assert not (dest / "a.mkv").exists()
+
+    def test_undo_from_file(self, tmp_path):
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "a.mkv"
+        f.write_bytes(b"x")
+        dest = tmp_path / "dest" / "Show"
+        plan = BuildPlanResult(
+            operations=[
+                PlanOperation(type="mkdir", path=str(dest)),
+                PlanOperation(type="move", source=str(f), path=str(dest / "a.mkv")),
+            ]
+        )
+        snap_path = str(tmp_path / "snap.json")
+        fsops.execute_plan(plan, dry_run=False, snapshot_path=snap_path)
+        fsops.undo_from_file(snap_path)
+        assert f.exists()
