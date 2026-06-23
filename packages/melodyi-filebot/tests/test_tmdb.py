@@ -111,3 +111,26 @@ class TestSeasonEpisodes:
         with patch("melodyi_filebot.tmdb.tmdbsimple.TV_Seasons", return_value=mock_seasons):
             eps = tmdb.get_season_episodes(46260, 1)
         assert eps == []
+
+
+from melodyi_filebot.models import CandidateSummary
+
+
+class TestMovieSummary:
+    """get_movie_summary 测试"""
+
+    def test_get_movie_summary(self):
+        mock_movie = MagicMock()
+        mock_movie.info.return_value = {
+            "id": 550,
+            "title": "搏击俱乐部",
+            "original_title": "Fight Club",
+            "release_date": "1999-10-15",
+            "overview": "x" * 50,
+        }
+        with patch("melodyi_filebot.tmdb.tmdbsimple.Movies", return_value=mock_movie):
+            movie = tmdb.get_movie_summary(550, language="zh-CN")
+        assert movie.tmdb_id == 550
+        assert movie.title == "搏击俱乐部"
+        assert movie.year == 1999
+        assert movie.media_type == "movie"

@@ -73,3 +73,69 @@ class TestCliFetchSummary:
             result = runner.invoke(cli, ["fetch-summary", "46260", "--episodes", "1"])
         assert result.exit_code == 0
         assert "第一集" in result.output
+
+
+from pathlib import Path
+
+
+class TestCliBuildPlan:
+    """build-plan 子命令测试"""
+
+    def test_build_plan_tv(self, tmp_path, tmdb_show_detail):
+        from melodyi_filebot.models import ShowSummary, SeasonSummary
+        show_dir = tmp_path / "src"
+        show_dir.mkdir()
+        (show_dir / "莉可丽丝 S01E01.mkv").write_bytes(b"x")
+        s = ShowSummary(
+            tmdb_id=46260, title="莉可丽丝", original_title="リコリス",
+            year=2022, total_seasons=1, total_episodes=13,
+            seasons=[SeasonSummary(season_number=1, name="S1", episode_count=13)],
+        )
+        with patch("melodyi_filebot.cli.tmdb.get_show_summary", return_value=s):
+            runner = CliRunner()
+            plan_path = str(tmp_path / "plan.json")
+            result = runner.invoke(cli, [
+                "build-plan", "--show-id", "46260",
+                "--source", str(show_dir), "--dest", str(tmp_path / "dest"),
+                "--out", plan_path,
+            ])
+        assert result.exit_code == 0, result.output
+        plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+        assert any(op["type"] == "move" for op in plan["operations"])
+
+
+class TestCliExecuteAndUndo:
+    """execute-plan 与 undo 测试"""
+
+    def test_execute_and_undo(self, tmp_path):
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "a.mkv"
+        f.write_bytes(b"x")
+        plan_path = str(tmp_path / "plan.json")
+        snap_path = str(tmp_path / "snap.json")
+        plan = {
+            "operations": [
+                {"type": "mkdir", "path": str(tmp_path / "dest" / "Show")},
+                {"type": "move", "source": str(f), "path": str(tmp_path / "dest" / "Show" / "a.mkv")},
+            ],
+            "spec_applied": "standard",
+            "warnings": [],
+        }
+        Path(plan_path).write_text(json.dumps(plan), encoding="utf-8")
+
+        runner = CliRunner()
+        # dry-run
+        r1 = runner.invoke(cli, ["execute-plan", "--plan", plan_path])
+        assert r1.exit_code == 0
+        assert "dry-run" in r1.output
+        assert f.exists()
+        # execute
+        r2 = runner.invoke(cli, ["execute-plan", "--plan", plan_path, "--execute", "--snapshot", snap_path])
+        assert r2.exit_code == 0
+        assert not f.exists()
+        assert (tmp_path / "dest" / "Show" / "a.mkv").exists()
+        # undo
+        r3 = runner.invoke(cli, ["undo", snap_path])
+        assert r3.exit_code == 0
+        assert f.exists()

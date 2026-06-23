@@ -128,3 +128,25 @@ def get_season_episodes(
     ]
     logger.info("获取季集列表完成: id=%s, season=%s, 集数=%d", tmdb_id, season_number, len(briefs))
     return briefs
+
+
+def get_movie_summary(tmdb_id: int, language: str = "zh-CN") -> CandidateSummary:
+    """获取电影摘要
+
+    Args:
+        tmdb_id: TMDB 电影 ID
+        language: 语言
+
+    Returns:
+        CandidateSummary（media_type="movie"）
+    """
+    _ensure_key()
+    logger.info("获取电影详情开始: id=%s, lang=%s", tmdb_id, language)
+    m = tmdbsimple.Movies(id=tmdb_id)
+    detail = m.info(language=language)
+    cands = summarize.candidates_from_search({"results": [detail]}, media_type="movie")
+    movie = cands[0] if cands else CandidateSummary(
+        tmdb_id=tmdb_id, title="", original_title="", media_type="movie"
+    )
+    logger.info("获取电影详情完成: id=%s", tmdb_id)
+    return movie
