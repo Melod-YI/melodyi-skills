@@ -53,3 +53,104 @@ class TestParseFilename:
     def test_stem_extraction(self):
         p = parse_filename("Show S01E01.mkv")
         assert "Show" in p.stem
+
+
+from melodyi_filebot.models import ShowSummary, SeasonSummary
+from melodyi_filebot.planner import build_plan_tv
+
+
+def _show_summary() -> ShowSummary:
+    return ShowSummary(
+        tmdb_id=46260,
+        title="莉可丽丝",
+        original_title="リコリス・リコイル",
+        year=2022,
+        total_seasons=1,
+        total_episodes=13,
+        overview_available=True,
+        overview_length=100,
+        seasons=[
+            SeasonSummary(season_number=0, name="Specials", episode_count=6),
+            SeasonSummary(season_number=1, name="Season 1", episode_count=13),
+        ],
+        episode_groups=[],
+    )
+
+
+class TestBuildPlanTv:
+    """build_plan_tv 测试"""
+
+    def test_standard_season1(self, tmp_path):
+        show_dir = tmp_path / "src"
+        show_dir.mkdir()
+        f1 = show_dir / "莉可丽丝 S01E01.mkv"
+        f2 = show_dir / "莉可丽丝 S01E02.mkv"
+        f1.write_bytes(b"x")
+        f2.write_bytes(b"x")
+
+        result = build_plan_tv(
+            files=[str(f1), str(f2)],
+            show=_show_summary(),
+            dest_root=str(tmp_path / "dest"),
+            language="zh-CN",
+        )
+        # 期望：mkdir 剧集目录 + mkdir Season 01 + 2 个 move
+        assert any(op.type == "mkdir" and "[tmdbid-46260]" in op.path for op in result.operations)
+        assert any(op.type == "mkdir" and op.path.endswith("Season 01") for op in result.operations)
+        moves = [op for op in result.operations if op.type == "move"]
+        assert len(moves) == 2
+        assert all("S01E0" in op.path for op in moves)
+        assert result.spec_applied == "standard"
+        assert result.warnings == []
+
+    def test_specials_season0(self, tmp_path):
+        show_dir = tmp_path / "src"
+        show_dir.mkdir()
+        f1 = show_dir / "特别篇 S00E01.mkv"
+        f1.write_bytes(b"x")
+
+        result = build_plan_tv(
+            files=[str(f1)],
+            show=_show_summary(),
+            dest_root=str(tmp_path / "dest"),
+            language="zh-CN",
+        )
+        assert any(op.type == "mkdir" and op.path.endswith("Season 00") for op in result.operations)
+        moves = [op for op in result.operations if op.type == "move"]
+        assert len(moves) == 1
+        assert "S00E01" in moves[0].path
+
+    def test_unparseable_file_warning(self, tmp_path):
+        show_dir = tmp_path / "src"
+        show_dir.mkdir()
+        f1 = show_dir / "random video.mkv"  # 无 S/E
+        f1.write_bytes(b"x")
+
+        result = build_plan_tv(
+            files=[str(f1)],
+            show=_show_summary(),
+            dest_root=str(tmp_path / "dest"),
+            language="zh-CN",
+        )
+        assert any("无法解析" in w for w in result.warnings)
+        # 不可解析文件不产生 move
+        assert all(op.type != "move" for op in result.operations)
+
+    def test_invalid_char_sanitized(self, tmp_path):
+        """标题含非法字符需清理"""
+        show = ShowSummary(
+            tmdb_id=1, title="剧:名", original_title="x", year=2020,
+            total_seasons=1, total_episodes=1, seasons=[
+                SeasonSummary(season_number=1, name="S1", episode_count=1)
+            ],
+        )
+        show_dir = tmp_path / "src"
+        show_dir.mkdir()
+        f1 = show_dir / "剧:名 S01E01.mkv"
+        f1.write_bytes(b"x")
+        result = build_plan_tv(
+            files=[str(f1)], show=show, dest_root=str(tmp_path / "dest"), language="zh-CN"
+        )
+        mkdirs = [op.path for op in result.operations if op.type == "mkdir"]
+        # 检查文件夹名本身（basename）不含非法字符；完整路径在 Windows 上含盘符冒号 C:
+        assert all(":" not in p.replace("\\", "/").split("/")[-1] for p in mkdirs)

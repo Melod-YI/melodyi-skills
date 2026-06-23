@@ -98,3 +98,88 @@ def parse_filename(filename: str) -> ParsedFile:
         episode_end=episode_end,
         part=part,
     )
+
+
+_INVALID_CHARS = '<>:"/\\|?*'
+
+
+def _sanitize(name: str) -> str:
+    """清理 Jellyfin 不允许的文件名字符"""
+    for ch in _INVALID_CHARS:
+        name = name.replace(ch, "_")
+    return name.strip().rstrip(".")
+
+
+def _show_folder(show: ShowSummary) -> str:
+    """剧文件夹名：剧名 (年) [tmdbid-xxx]"""
+    year = f" ({show.year})" if show.year else ""
+    return _sanitize(f"{show.title}{year} [tmdbid-{show.tmdb_id}]")
+
+
+def _season_folder(season_number: int) -> str:
+    """季文件夹名：Season 01（补零到 2 位）"""
+    return f"Season {season_number:02d}"
+
+
+def _episode_filename(
+    show: ShowSummary, season: int, episode: int, episode_end: Optional[int], part: Optional[int], ext: str
+) -> str:
+    """集文件名：剧名 (年) S01E01[-E02][-part1].ext"""
+    year = f" ({show.year})" if show.year else ""
+    base = f"{_sanitize(show.title)}{year} S{season:02d}E{episode:02d}"
+    if episode_end:
+        base += f"-E{episode_end:02d}"
+    if part:
+        base += f"-part{part}"
+    return base + ext
+
+
+def build_plan_tv(
+    files: List[str],
+    show: ShowSummary,
+    dest_root: str,
+    language: str = "zh-CN",
+) -> BuildPlanResult:
+    """构建剧集重命名与目录整理计划（标准流程，P0 不含 NFO）
+
+    Args:
+        files: 源视频文件绝对路径列表
+        show: TMDB 剧摘要
+        dest_root: 目标媒体根目录
+        language: 语言
+
+    Returns:
+        BuildPlanResult，含 mkdir/move 操作与警告
+    """
+    logger.info("构建剧集计划开始: show=%s, 文件数=%d", show.title, len(files))
+    operations: List[PlanOperation] = []
+    warnings: List[str] = []
+
+    show_folder = _show_folder(show)
+    show_dir = f"{dest_root}/{show_folder}"
+    operations.append(PlanOperation(type="mkdir", path=show_dir))
+
+    created_seasons: set = set()
+    for f in files:
+        parsed = parse_filename(f)
+        if parsed.episode is None:
+            warnings.append(f"无法解析集号，跳过: {f}")
+            logger.warning("无法解析集号: %s", f)
+            continue
+        season = parsed.season if parsed.season is not None else 1
+        season_dir = f"{show_dir}/{_season_folder(season)}"
+        if season not in created_seasons:
+            operations.append(PlanOperation(type="mkdir", path=season_dir))
+            created_seasons.add(season)
+
+        target_name = _episode_filename(
+            show, season, parsed.episode, parsed.episode_end, parsed.part, parsed.ext
+        )
+        target = f"{season_dir}/{target_name}"
+        operations.append(PlanOperation(type="move", source=f, path=target))
+
+    logger.info(
+        "构建剧集计划完成: show=%s, 操作数=%d, 警告数=%d",
+        show.title, len(operations), len(warnings),
+    )
+    return BuildPlanResult(operations=operations, spec_applied="standard", warnings=warnings)
