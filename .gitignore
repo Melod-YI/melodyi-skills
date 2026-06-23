@@ -2,7 +2,6 @@
 __pycache__/
 .playwright-cli/
 .claude/
-docs/
 *.egg-info/
 .env
 *副本/
