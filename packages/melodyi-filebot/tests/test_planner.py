@@ -210,6 +210,128 @@ class TestBuildPlanMovie:
         assert any("未找到视频文件" in w for w in result.warnings)
 
 
+class TestCompanions:
+    """伴生文件（字幕等 sidecar）自动改名测试
+
+    规则：视频改名时，同目录下「视频 stem.」前缀的非视频文件随之改名，
+    目标名 = 改名后视频 stem + 原后缀（语言 token 等原样保留）。
+    """
+
+    def _show(self):
+        return ShowSummary(
+            tmdb_id=46260, title="莉可丽丝", original_title="リコリス", year=2022,
+            total_seasons=1, total_episodes=13,
+            seasons=[SeasonSummary(season_number=1, name="S1", episode_count=13)],
+        )
+
+    def test_tv_subtitle_renamed_with_video(self, tmp_path):
+        """视频改名时同名字幕随之改名，落到同季目录"""
+        src = tmp_path / "src"
+        src.mkdir()
+        v = src / "Show S01E01.mkv"
+        sub = src / "Show S01E01.ass"
+        v.write_bytes(b"x")
+        sub.write_text("x")
+        result = build_plan_tv(
+            files=[str(v)], show=self._show(), dest_root=str(tmp_path / "dest")
+        )
+        moves = {op.source: op.path for op in result.operations if op.type == "move"}
+        # 视频与字幕都产生 move
+        assert str(sub) in moves
+        # 字幕落到 Season 01，目标名=视频新 stem + 原后缀
+        assert "Season 01" in moves[str(sub)]
+        assert moves[str(sub)].replace("\\", "/").endswith("/莉可丽丝 (2022) S01E01.ass")
+
+    def test_tv_language_tag_suffix_preserved(self, tmp_path):
+        """.TC.ass 的语言 token 后缀原样保留"""
+        src = tmp_path / "src"
+        src.mkdir()
+        v = src / "Show S01E01.mkv"
+        tc = src / "Show S01E01.TC.ass"
+        v.write_bytes(b"x")
+        tc.write_text("x")
+        result = build_plan_tv(
+            files=[str(v)], show=self._show(), dest_root=str(tmp_path / "dest")
+        )
+        moves = {op.source: op.path for op in result.operations if op.type == "move"}
+        assert moves[str(tc)].replace("\\", "/").endswith("/莉可丽丝 (2022) S01E01.TC.ass")
+
+    def test_tv_partial_prefix_companion_excluded(self, tmp_path):
+        """部分前缀（stem 后非 '.'）的文件不当伴生"""
+        src = tmp_path / "src"
+        src.mkdir()
+        v = src / "Show S01E01.mkv"
+        other = src / "Show S01E01-extra.ass"  # stem 后是 '-'，非伴生
+        v.write_bytes(b"x")
+        other.write_text("x")
+        result = build_plan_tv(
+            files=[str(v)], show=self._show(), dest_root=str(tmp_path / "dest")
+        )
+        moves = [op for op in result.operations if op.type == "move"]
+        # 只有视频一个 move
+        assert len(moves) == 1
+        assert moves[0].source == str(v)
+
+    def test_tv_from_map_companions_follow(self, tmp_path):
+        """override 模式：伴生跟随 map 里的视频条目"""
+        from melodyi_filebot.planner import build_plan_tv_from_map
+        from melodyi_filebot.models import PlanMap, FileMapping
+        src = tmp_path / "src"
+        src.mkdir()
+        v = src / "随便.mkv"
+        sub = src / "随便.ass"
+        v.write_bytes(b"x")
+        sub.write_text("x")
+        plan_map = PlanMap(
+            media_type="tv", tmdb_id=46260,
+            mappings=[FileMapping(file=str(v), season=1, episode=1)],
+        )
+        result = build_plan_tv_from_map(plan_map, self._show(), dest_root=str(tmp_path / "dest"))
+        moves = {op.source: op.path for op in result.operations if op.type == "move"}
+        assert str(sub) in moves
+        assert moves[str(sub)].replace("\\", "/").endswith("/莉可丽丝 (2022) S01E01.ass")
+
+    def test_movie_companions_follow(self, tmp_path):
+        """电影正片改名时伴生随之改名"""
+        src = tmp_path / "src"
+        src.mkdir()
+        v = src / "某电影.2020.mkv"
+        sub = src / "某电影.2020.ass"
+        v.write_bytes(b"x")
+        sub.write_text("x")
+        movie = CandidateSummary(
+            tmdb_id=123, title="某电影", original_title="Mov", year=2020,
+            overview_length=50, media_type="movie",
+        )
+        result = build_plan_movie(files=[str(v)], movie=movie, dest_root=str(tmp_path / "dest"))
+        moves = {op.source: op.path for op in result.operations if op.type == "move"}
+        assert str(sub) in moves
+        assert moves[str(sub)].replace("\\", "/").endswith("/某电影 (2020).ass")
+
+    def test_movie_from_map_companions_follow(self, tmp_path):
+        """电影 override：正片伴生随之改名"""
+        from melodyi_filebot.planner import build_plan_movie_from_map
+        from melodyi_filebot.models import PlanMap, FileMapping
+        src = tmp_path / "src"
+        src.mkdir()
+        v = src / "main.mkv"
+        sub = src / "main.ass"
+        v.write_bytes(b"x")
+        sub.write_text("x")
+        movie = CandidateSummary(
+            tmdb_id=123, title="某电影", original_title="Mov", year=2020,
+            overview_length=50, media_type="movie",
+        )
+        plan_map = PlanMap(
+            media_type="movie", tmdb_id=123,
+            mappings=[FileMapping(file=str(v))],
+        )
+        result = build_plan_movie_from_map(plan_map, movie, dest_root=str(tmp_path / "dest"))
+        moves = {op.source: op.path for op in result.operations if op.type == "move"}
+        assert str(sub) in moves
+        assert moves[str(sub)].replace("\\", "/").endswith("/某电影 (2020).ass")
+
+
 class TestPathNormalization:
     """输入路径归一化测试
 

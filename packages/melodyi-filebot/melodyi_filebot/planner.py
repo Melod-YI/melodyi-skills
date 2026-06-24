@@ -135,6 +135,38 @@ def _episode_filename(
     return base + ext
 
 
+def _companion_ops(
+    video_source: str, video_target: str, video_target_name: str
+) -> List[PlanOperation]:
+    """为视频 move 生成伴生文件 move 操作（字幕等 sidecar）
+
+    伴生 = 同目录下「视频 stem.」前缀的非视频文件（由 fsops.find_companions 发现）。
+    目标名 = 改名后视频 stem + 原后缀（语言 token 等原样保留），落到视频目标同目录。
+
+    Args:
+        video_source: 视频源路径
+        video_target: 视频目标完整路径
+        video_target_name: 视频目标文件名（含扩展名）
+
+    Returns:
+        伴生 move 操作列表
+    """
+    from melodyi_filebot.fsops import find_companions  # 延迟导入，避免与 fsops 循环
+    companions = find_companions(video_source)
+    if not companions:
+        return []
+    target_dir = os.path.dirname(video_target)
+    video_stem = Path(video_source).stem
+    new_stem = Path(video_target_name).stem
+    ops: List[PlanOperation] = []
+    for comp in companions:
+        suffix_part = Path(comp).name[len(video_stem):]
+        comp_target = os.path.join(target_dir, new_stem + suffix_part)
+        ops.append(PlanOperation(type="move", source=os.path.normpath(comp), path=comp_target))
+        logger.info("伴生改名: %s -> %s", comp, comp_target)
+    return ops
+
+
 def build_plan_tv(
     files: List[str],
     show: ShowSummary,
@@ -189,6 +221,7 @@ def build_plan_tv(
         )
         target = os.path.join(season_dir, target_name)
         operations.append(PlanOperation(type="move", source=os.path.normpath(f), path=target))
+        operations.extend(_companion_ops(f, target, target_name))
 
     logger.info(
         "构建剧集计划完成: show=%s, 操作数=%d, 警告数=%d",
@@ -229,6 +262,7 @@ def build_plan_movie(
     target_name = _sanitize(f"{movie.title}{year}") + Path(files[0]).suffix
     target = os.path.join(movie_dir, target_name)
     operations.append(PlanOperation(type="move", source=os.path.normpath(files[0]), path=target))
+    operations.extend(_companion_ops(files[0], target, target_name))
     for extra in files[1:]:
         warnings.append(f"电影存在多个视频文件，已忽略: {extra}")
         logger.warning("电影多文件忽略: %s", extra)
@@ -312,6 +346,7 @@ def build_plan_tv_from_map(
         target_name = _episode_filename(show, season, m.episode, m.episode_end, m.part, ext)
         target = os.path.join(season_dir, target_name)
         operations.append(PlanOperation(type="move", source=os.path.normpath(m.file), path=target))
+        operations.extend(_companion_ops(m.file, target, target_name))
 
     logger.info("按映射构建剧集计划完成: 操作数=%d, 警告数=%d", len(operations), len(warnings))
     return BuildPlanResult(operations=operations, spec_applied="override", warnings=warnings)
@@ -349,6 +384,7 @@ def build_plan_movie_from_map(
     target_name = _sanitize(f"{movie.title}{year}") + Path(main.file).suffix
     target = os.path.join(movie_dir, target_name)
     operations.append(PlanOperation(type="move", source=os.path.normpath(main.file), path=target))
+    operations.extend(_companion_ops(main.file, target, target_name))
     for extra in plan_map.mappings[1:]:
         warnings.append(f"电影存在多个视频文件，已忽略: {extra.file}")
         logger.warning("电影多文件忽略: %s", extra.file)

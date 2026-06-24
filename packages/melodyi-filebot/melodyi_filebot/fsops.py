@@ -41,6 +41,46 @@ def scan_video_files(root: str) -> List[str]:
     return files
 
 
+def find_companions(video_path: str) -> List[str]:
+    """查找视频的伴生文件（字幕等 sidecar）
+
+    伴生 = 与视频同目录、文件名以「视频 stem + '.'」开头的非视频文件。
+    要求 stem 后紧跟 '.'，确保伴生的前缀是视频 stem 的完整 dotted 段，
+    避免对 `Show S01E01` 的视频误 claim `Show S01E01-part-1.ass` 这类部分前缀。
+
+    Args:
+        video_path: 视频文件绝对路径
+
+    Returns:
+        伴生文件绝对路径列表（升序）。目录不存在时返回空列表。
+    """
+    p = Path(video_path)
+    d = p.parent
+    if not d.exists():
+        logger.info("查找伴生跳过（目录不存在）: %s", video_path)
+        return []
+    vstem = p.stem
+    video_name = p.name
+    companions = []
+    for sibling in d.iterdir():
+        if not sibling.is_file():
+            continue
+        name = sibling.name
+        if name == video_name:
+            continue  # 视频自身
+        if not name.startswith(vstem):
+            continue
+        # stem 后必须紧跟 '.'（完整 dotted 段，排除部分前缀匹配）
+        if len(name) <= len(vstem) or name[len(vstem)] != ".":
+            continue
+        if sibling.suffix.lower() in VIDEO_EXTS:
+            continue  # 同前缀的其他视频不当伴生
+        companions.append(str(sibling))
+    companions.sort()
+    logger.info("查找伴生: video=%s, 伴生数=%d", video_path, len(companions))
+    return companions
+
+
 def _validate(plan: BuildPlanResult) -> None:
     """dry-run 前置校验：源存在、目标无冲突
 

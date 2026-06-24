@@ -83,6 +83,7 @@ melodyi-filebot build-plan --movie-id <tmdb_id> --source <源目录> --dest <目
 - 季号优先从**文件名**解析（`S01E01`、`[01]` 等）。源目录的文件夹结构（如 `Season 2/`）**不被读取**作季来源。
 - **多季剧、源目录只是其中一季**：若文件名带季标记（`S02E01`）直接正确归类；若文件名**不带**季标记（番剧常见的 `[01]..[12]`），用 `--season N` 指定这一季的季号（文件名有显式季标记如 `S00` 特别篇仍以文件名为准，不被覆盖）。`--season` 仅适用于剧集。
 - 文件无法解析集号，或其他非标场景 → 出现在 `warnings`，需向用户确认如何处理
+- **伴生文件自动改名**：每个视频改名时，同目录下文件名以「视频 stem + `.`」开头的非视频文件（字幕 `.ass`/`.srt`、海报等 sidecar）会随之改名，目标名 = 改名后视频 stem + 原后缀（语言 token 如 `.TC` 原样保留，不猜测语言）。例如视频 `Show S01E01.mkv → 翼年代记 (2005) S01E01.mkv` 时，`Show S01E01.TC.ass` → `翼年代记 (2005) S01E01.TC.ass`。该逻辑对自动模式与 override（`--map`）模式同样生效；`draft-map` 仍只映射视频，伴生在 `build-plan` 阶段自动发现并跟随。stem 后非 `.` 的文件（如 `Show S01E01-extra.ass`）不被视为伴生。
 
 **季/集归属不确定时用 override（draft-then-edit）**：季/集判断随机性大，不靠规则硬编码。当文件名无季标记且季归属不明、`[01-06]` 可能是 S00/S01、集号需重排、一文件多集/一集多文件、特别篇归季不明时，走 override：
 
@@ -114,6 +115,7 @@ melodyi-filebot execute-plan --plan plan.json --execute --snapshot /path/to/snap
 ```
 
 - dry-run：校验源文件存在、目标无冲突，不执行不写日志
+- 伴生文件（字幕等）的 move 同样在 dry-run 校验范围内，并随 `--execute` 一起移动、写入事务日志
 - `--execute`：真正执行，**一定会写事务日志**：
   - 未指定 `--snapshot` → 默认写到 `~/.melodyi-filebot/snapshots/<plan文件名>.snapshot.json`
   - 指定 `--snapshot` → 写到指定路径
