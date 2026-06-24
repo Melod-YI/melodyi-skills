@@ -139,3 +139,88 @@ class TestCliExecuteAndUndo:
         r3 = runner.invoke(cli, ["undo", snap_path])
         assert r3.exit_code == 0
         assert f.exists()
+
+
+class TestExecuteDefaultSnapshot:
+    """--execute 不指定 --snapshot 时的默认日志行为"""
+
+    def _write_plan(self, tmp_path, src_file, target):
+        plan = {
+            "operations": [
+                {"type": "mkdir", "path": str(target.parent)},
+                {"type": "move", "source": str(src_file), "path": str(target)},
+            ],
+            "spec_applied": "standard",
+            "warnings": [],
+        }
+        plan_path = tmp_path / "plan.json"
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        return plan_path
+
+    def test_execute_writes_default_snapshot(self, tmp_path, monkeypatch):
+        """--execute 无 --snapshot 时，默认写到 SNAPSHOTS_DIR/<stem>.snapshot.json"""
+        import melodyi_filebot.config as fbconfig
+        snaps_dir = tmp_path / "snapshots"
+        monkeypatch.setattr(fbconfig, "SNAPSHOTS_DIR", snaps_dir)
+
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "a.mkv"
+        f.write_bytes(b"x")
+        target = tmp_path / "dest" / "Show" / "a.mkv"
+        plan_path = self._write_plan(tmp_path, f, target)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["execute-plan", "--plan", str(plan_path), "--execute"])
+        assert result.exit_code == 0, result.output
+        # 默认 snapshot 已写入
+        default_snap = snaps_dir / "plan.snapshot.json"
+        assert default_snap.exists()
+        # 执行确实发生
+        assert not f.exists()
+        assert target.exists()
+        # 输出提示路径与 undo 用法
+        assert str(default_snap) in result.output
+        assert "undo" in result.output
+
+    def test_default_snapshot_is_undoable(self, tmp_path, monkeypatch):
+        """默认 snapshot 可用于 undo 回滚"""
+        import melodyi_filebot.config as fbconfig
+        snaps_dir = tmp_path / "snapshots"
+        monkeypatch.setattr(fbconfig, "SNAPSHOTS_DIR", snaps_dir)
+
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "a.mkv"
+        f.write_bytes(b"x")
+        target = tmp_path / "dest" / "Show" / "a.mkv"
+        plan_path = self._write_plan(tmp_path, f, target)
+
+        runner = CliRunner()
+        runner.invoke(cli, ["execute-plan", "--plan", str(plan_path), "--execute"])
+        default_snap = str(snaps_dir / "plan.snapshot.json")
+        assert Path(default_snap).exists()
+        # undo
+        r = runner.invoke(cli, ["undo", default_snap])
+        assert r.exit_code == 0
+        assert f.exists()
+
+    def test_dry_run_writes_no_snapshot(self, tmp_path, monkeypatch):
+        """dry-run 不写 snapshot"""
+        import melodyi_filebot.config as fbconfig
+        snaps_dir = tmp_path / "snapshots"
+        monkeypatch.setattr(fbconfig, "SNAPSHOTS_DIR", snaps_dir)
+
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "a.mkv"
+        f.write_bytes(b"x")
+        target = tmp_path / "dest" / "Show" / "a.mkv"
+        plan_path = self._write_plan(tmp_path, f, target)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["execute-plan", "--plan", str(plan_path)])
+        assert result.exit_code == 0
+        assert not snaps_dir.exists() or not any(snaps_dir.iterdir())
+        # dry-run 不应改动文件系统
+        assert f.exists()

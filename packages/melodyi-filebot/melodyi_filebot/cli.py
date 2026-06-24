@@ -10,7 +10,7 @@ import logging
 
 import click
 
-from melodyi_filebot import __version__, tmdb
+from melodyi_filebot import __version__, config, tmdb
 from melodyi_filebot.planner import build_plan_tv, build_plan_movie
 from melodyi_filebot import fsops
 
@@ -97,20 +97,36 @@ def build_plan(show_id, movie_id, source, dest, language, out):
 @cli.command(name="execute-plan")
 @click.option("--plan", "plan_path", required=True, type=click.Path(exists=True))
 @click.option("--execute", is_flag=True, help="真正执行（默认 dry-run）")
-@click.option("--snapshot", type=click.Path(), default=None, help="事务日志保存路径")
+@click.option("--snapshot", type=click.Path(), default=None, help="事务日志保存路径（默认存到 ~/.melodyi-filebot/snapshots/ 下）")
 def execute_plan_cmd(plan_path, execute, snapshot):
-    """执行计划（默认 dry-run）"""
+    """执行计划（默认 dry-run）
+
+    真正执行（--execute）时一定会写事务日志，以便事后 undo：
+    - 显式 --snapshot：写到指定路径
+    - 未指定：默认写到 ~/.melodyi-filebot/snapshots/<plan文件名>.snapshot.json
+    dry-run 不执行，不写日志。
+    """
     import pathlib
     plan_data = json.loads(pathlib.Path(plan_path).read_text(encoding="utf-8"))
     from melodyi_filebot.models import BuildPlanResult
     plan = BuildPlanResult(**plan_data)
+
+    if execute and not snapshot:
+        # 默认 snapshot 路径：plan 文件名（去扩展名）+ .snapshot.json
+        plan_stem = pathlib.Path(plan_path).stem
+        snapshots_dir = config.SNAPSHOTS_DIR
+        snapshots_dir.mkdir(parents=True, exist_ok=True)
+        snapshot = str(snapshots_dir / f"{plan_stem}.snapshot.json")
+        logger.info("未指定 --snapshot，使用默认路径: %s", snapshot)
+
     snap = fsops.execute_plan(plan, dry_run=not execute, snapshot_path=snapshot if execute else None)
     if not execute:
         click.echo("dry-run 校验通过，未执行任何操作。加 --execute 真正执行。")
     else:
         click.echo("执行完成。")
         if snap and snapshot:
-            click.echo(f"事务日志: {snapshot}")
+            click.echo(f"事务日志已保存: {snapshot}")
+            click.echo(f"如需回滚，执行: melodyi-filebot undo \"{snapshot}\"")
 
 
 @cli.command()

@@ -40,3 +40,20 @@ class TestLoadTmdbApiKey:
         monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "nope.yaml")
         with patch.dict(os.environ, {}, clear=True):
             assert config.load_tmdb_api_key() is None
+
+
+class TestConfigDirs:
+    """配置/数据目录常量测试"""
+
+    def test_config_dir_is_user_home(self):
+        from pathlib import Path
+        from melodyi_filebot import config
+        assert config.CONFIG_DIR == Path.home() / ".melodyi-filebot"
+
+    def test_config_path_under_config_dir(self):
+        from melodyi_filebot import config
+        assert config.CONFIG_PATH == config.CONFIG_DIR / "config.yaml"
+
+    def test_snapshots_dir_under_config_dir(self):
+        from melodyi_filebot import config
+        assert config.SNAPSHOTS_DIR == config.CONFIG_DIR / "snapshots"
