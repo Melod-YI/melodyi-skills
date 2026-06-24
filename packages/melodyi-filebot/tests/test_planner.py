@@ -360,3 +360,109 @@ class TestSeasonHint:
         moves = [op for op in result.operations if op.type == "move"]
         assert "Season 01" in moves[0].path
         assert "S01E01" in moves[0].path
+
+
+class TestDraftAndOverrideMap:
+    """draft-map 生成与 build-plan --map override 测试"""
+
+    def _show(self):
+        return ShowSummary(
+            tmdb_id=46260, title="莉可丽丝", original_title="リコリス", year=2022,
+            total_seasons=2, total_episodes=19,
+            seasons=[
+                SeasonSummary(season_number=0, name="Specials", episode_count=6),
+                SeasonSummary(season_number=1, name="S1", episode_count=13),
+            ],
+        )
+
+    def test_draft_map_tv_emits_parsed_guesses(self, tmp_path):
+        """draft-map 输出每个文件的解析猜测，含无法解析项"""
+        from melodyi_filebot.planner import draft_map_tv
+        src = tmp_path / "src"
+        src.mkdir()
+        f1 = src / "Show S02E01.mkv"
+        f2 = src / "Show [03].mkv"
+        f3 = src / "unknown.mkv"
+        for f in (f1, f2, f3):
+            f.write_bytes(b"x")
+        m = draft_map_tv([str(f1), str(f2), str(f3)], tmdb_id=46260, season_hint=2)
+        assert m.media_type == "tv"
+        assert m.tmdb_id == 46260
+        assert len(m.mappings) == 3
+        by_file = {x.file: x for x in m.mappings}
+        # 显式季标记保留
+        assert by_file[str(f1)].season == 2 and by_file[str(f1)].episode == 1
+        # 无季标记用 season_hint
+        assert by_file[str(f2)].season == 2 and by_file[str(f2)].episode == 3
+        # 无法解析：episode 为 None
+        assert by_file[str(f3)].episode is None
+
+    def test_build_plan_tv_from_map_uses_explicit_mapping(self, tmp_path):
+        """build-plan --map 按显式映射构建，不解析文件名"""
+        from melodyi_filebot.planner import build_plan_tv_from_map
+        from melodyi_filebot.models import PlanMap, FileMapping
+        src = tmp_path / "src"
+        src.mkdir()
+        f1 = src / "随便起的名.mkv"
+        f2 = src / "another.mkv"
+        f1.write_bytes(b"x")
+        f2.write_bytes(b"x")
+        plan_map = PlanMap(
+            media_type="tv", tmdb_id=46260, language="zh-CN",
+            mappings=[
+                FileMapping(file=str(f1), season=2, episode=1),
+                FileMapping(file=str(f2), season=0, episode=3),
+            ],
+        )
+        result = build_plan_tv_from_map(plan_map, self._show(), dest_root=str(tmp_path / "dest"))
+        moves = {op.source: op.path for op in result.operations if op.type == "move"}
+        assert "Season 02" in moves[str(f1)] and "S02E01" in moves[str(f1)]
+        assert "Season 00" in moves[str(f2)] and "S00E03" in moves[str(f2)]
+        assert result.spec_applied == "override"
+
+    def test_build_plan_tv_from_map_skips_missing_episode(self, tmp_path):
+        """映射中 episode 为 None 的项跳过并告警"""
+        from melodyi_filebot.planner import build_plan_tv_from_map
+        from melodyi_filebot.models import PlanMap, FileMapping
+        src = tmp_path / "src"
+        src.mkdir()
+        f1 = src / "a.mkv"
+        f2 = src / "b.mkv"
+        f1.write_bytes(b"x")
+        f2.write_bytes(b"x")
+        plan_map = PlanMap(
+            media_type="tv", tmdb_id=46260,
+            mappings=[
+                FileMapping(file=str(f1), season=1, episode=1),
+                FileMapping(file=str(f2), season=None, episode=None),
+            ],
+        )
+        result = build_plan_tv_from_map(plan_map, self._show(), dest_root=str(tmp_path / "dest"))
+        moves = [op for op in result.operations if op.type == "move"]
+        assert len(moves) == 1
+        assert any("缺少集号" in w or "跳过" in w for w in result.warnings)
+
+    def test_build_plan_movie_from_map(self, tmp_path):
+        """电影 override：第一个映射为正片"""
+        from melodyi_filebot.planner import build_plan_movie_from_map
+        from melodyi_filebot.models import PlanMap, FileMapping, CandidateSummary
+        src = tmp_path / "src"
+        src.mkdir()
+        f1 = src / "main.mkv"
+        f2 = src / "extra.mkv"
+        f1.write_bytes(b"x")
+        f2.write_bytes(b"x")
+        movie = CandidateSummary(
+            tmdb_id=123, title="某电影", original_title="Mov", year=2020,
+            overview_length=50, media_type="movie",
+        )
+        plan_map = PlanMap(
+            media_type="movie", tmdb_id=123,
+            mappings=[FileMapping(file=str(f1)), FileMapping(file=str(f2))],
+        )
+        result = build_plan_movie_from_map(plan_map, movie, dest_root=str(tmp_path / "dest"))
+        moves = [op for op in result.operations if op.type == "move"]
+        assert len(moves) == 1
+        assert moves[0].source == str(f1)
+        assert "某电影 (2020).mkv" in moves[0].path
+        assert result.spec_applied == "override"

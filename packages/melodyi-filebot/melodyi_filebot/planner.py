@@ -235,3 +235,123 @@ def build_plan_movie(
 
     logger.info("构建电影计划完成: movie=%s", movie.title)
     return BuildPlanResult(operations=operations, spec_applied="standard", warnings=warnings)
+
+
+def draft_map_tv(
+    files: List[str],
+    tmdb_id: int,
+    season_hint: Optional[int] = None,
+    language: str = "zh-CN",
+) -> "PlanMap":
+    """生成剧的文件→季/集 映射初版（供 agent/用户编辑）
+
+    扫描+解析文件名，输出每个文件的解析猜测；无法解析的项 season/episode 为 None，
+    由 agent 对照 fetch-summary 后补全。不调用 TMDB，仅透传 tmdb_id。
+
+    Args:
+        files: 源视频文件绝对路径列表
+        tmdb_id: TMDB 剧 ID
+        season_hint: 季提示（文件名无季标记时填入）
+        language: 语言
+
+    Returns:
+        PlanMap 初版
+    """
+    from melodyi_filebot.models import FileMapping, PlanMap
+    logger.info("生成映射初版开始: tmdb_id=%s, 文件数=%d, season_hint=%s", tmdb_id, len(files), season_hint)
+    mappings: List[FileMapping] = []
+    for f in files:
+        parsed = parse_filename(f)
+        season = parsed.season if parsed.season is not None else season_hint
+        mappings.append(
+            FileMapping(
+                file=os.path.normpath(f),
+                season=season,
+                episode=parsed.episode,
+                episode_end=parsed.episode_end,
+                part=parsed.part,
+            )
+        )
+    logger.info("生成映射初版完成: 映射数=%d", len(mappings))
+    return PlanMap(media_type="tv", tmdb_id=tmdb_id, language=language, mappings=mappings)
+
+
+def build_plan_tv_from_map(
+    plan_map: "PlanMap",
+    show: ShowSummary,
+    dest_root: str,
+) -> BuildPlanResult:
+    """按显式映射构建剧集计划（override，不解析文件名）
+
+    Args:
+        plan_map: 显式文件→季/集 映射
+        show: TMDB 剧摘要（用于目录命名）
+        dest_root: 目标媒体根目录
+
+    Returns:
+        BuildPlanResult，spec_applied="override"
+    """
+    logger.info("按映射构建剧集计划开始: show=%s, 映射数=%d", show.title, len(plan_map.mappings))
+    dest_root = os.path.normpath(dest_root)
+    show_dir = os.path.join(dest_root, _show_folder(show))
+    operations: List[PlanOperation] = [PlanOperation(type="mkdir", path=show_dir)]
+    warnings: List[str] = []
+
+    created_seasons: set = set()
+    for m in plan_map.mappings:
+        if m.episode is None:
+            warnings.append(f"映射缺少集号，跳过: {m.file}")
+            logger.warning("映射缺少集号: %s", m.file)
+            continue
+        season = m.season if m.season is not None else 1
+        season_dir = os.path.join(show_dir, _season_folder(season))
+        if season not in created_seasons:
+            operations.append(PlanOperation(type="mkdir", path=season_dir))
+            created_seasons.add(season)
+        ext = Path(m.file).suffix
+        target_name = _episode_filename(show, season, m.episode, m.episode_end, m.part, ext)
+        target = os.path.join(season_dir, target_name)
+        operations.append(PlanOperation(type="move", source=os.path.normpath(m.file), path=target))
+
+    logger.info("按映射构建剧集计划完成: 操作数=%d, 警告数=%d", len(operations), len(warnings))
+    return BuildPlanResult(operations=operations, spec_applied="override", warnings=warnings)
+
+
+def build_plan_movie_from_map(
+    plan_map: "PlanMap",
+    movie: CandidateSummary,
+    dest_root: str,
+) -> BuildPlanResult:
+    """按显式映射构建电影计划（override，第一个映射为正片）
+
+    Args:
+        plan_map: 显式文件映射
+        movie: TMDB 电影摘要
+        dest_root: 目标媒体根目录
+
+    Returns:
+        BuildPlanResult，spec_applied="override"
+    """
+    logger.info("按映射构建电影计划开始: movie=%s, 映射数=%d", movie.title, len(plan_map.mappings))
+    dest_root = os.path.normpath(dest_root)
+    year = f" ({movie.year})" if movie.year else ""
+    folder = _sanitize(f"{movie.title}{year} [tmdbid-{movie.tmdb_id}]")
+    movie_dir = os.path.join(dest_root, folder)
+    operations: List[PlanOperation] = [PlanOperation(type="mkdir", path=movie_dir)]
+    warnings: List[str] = []
+
+    if not plan_map.mappings:
+        warnings.append("映射为空，未生成 move 操作")
+        logger.warning("映射为空: movie=%s", movie.title)
+        return BuildPlanResult(operations=operations, spec_applied="override", warnings=warnings)
+
+    main = plan_map.mappings[0]
+    target_name = _sanitize(f"{movie.title}{year}") + Path(main.file).suffix
+    target = os.path.join(movie_dir, target_name)
+    operations.append(PlanOperation(type="move", source=os.path.normpath(main.file), path=target))
+    for extra in plan_map.mappings[1:]:
+        warnings.append(f"电影存在多个视频文件，已忽略: {extra.file}")
+        logger.warning("电影多文件忽略: %s", extra.file)
+
+    logger.info("按映射构建电影计划完成: movie=%s", movie.title)
+    return BuildPlanResult(operations=operations, spec_applied="override", warnings=warnings)
