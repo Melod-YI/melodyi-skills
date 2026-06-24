@@ -86,6 +86,45 @@ class TestSummarize:
     def test_candidates_empty(self):
         assert summarize.candidates_from_search({"results": []}, "tv") == []
 
+    def test_candidates_multi_uses_per_result_media_type(self):
+        """multi 搜索时，每条结果按自带 media_type 选字段并写入模型
+
+        回归用例：bug 表现为 tv 条目走 movie 字段分支，title/year 为空，
+        且 CandidateSummary.media_type 错误地存为 "multi"。
+        """
+        search_resp = {
+            "results": [
+                {
+                    "id": 45782,
+                    "name": "刀剑神域",
+                    "original_name": "ソードアート・オンライン",
+                    "first_air_date": "2012-07-08",
+                    "overview": "x" * 50,
+                    "media_type": "tv",
+                },
+                {
+                    "id": 413594,
+                    "title": "刀剑神域：序列之争",
+                    "original_title": "劇場版 ソードアート・オンライン",
+                    "release_date": "2017-02-18",
+                    "overview": "y" * 50,
+                    "media_type": "movie",
+                },
+            ]
+        }
+        cands = summarize.candidates_from_search(search_resp, media_type="multi")
+        assert len(cands) == 2
+        # tv 条目用 name/first_air_date，类型保留为 tv
+        assert cands[0].title == "刀剑神域"
+        assert cands[0].original_title == "ソードアート・オンライン"
+        assert cands[0].year == 2012
+        assert cands[0].media_type == "tv"
+        # movie 条目用 title/release_date，类型保留为 movie
+        assert cands[1].title == "刀剑神域：序列之争"
+        assert cands[1].original_title == "劇場版 ソードアート・オンライン"
+        assert cands[1].year == 2017
+        assert cands[1].media_type == "movie"
+
     def test_year_from_release_date(self):
         assert summarize._year_from_date("2022-07-02") == 2022
         assert summarize._year_from_date(None) is None

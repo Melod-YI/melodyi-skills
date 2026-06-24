@@ -93,11 +93,16 @@ def candidates_from_search(search_resp: dict, media_type: str) -> List[Candidate
         候选摘要列表
     """
     results = search_resp.get("results", []) or []
-    date_field = "first_air_date" if media_type == "tv" else "release_date"
-    name_field = "name" if media_type == "tv" else "title"
-    orig_field = "original_name" if media_type == "tv" else "original_title"
     candidates = []
     for r in results:
+        # multi 搜索时每条结果自带 media_type 字段，按其选字段；
+        # tv/movie 搜索时用传入的 media_type 统一字段。
+        effective_type = r.get("media_type", media_type) if media_type == "multi" else media_type
+        # person 等非 tv/movie 类型无对应字段，统一按 movie 字段兜底（仅取 id/overview）
+        use_tv = effective_type == "tv"
+        date_field = "first_air_date" if use_tv else "release_date"
+        name_field = "name" if use_tv else "title"
+        orig_field = "original_name" if use_tv else "original_title"
         candidates.append(
             CandidateSummary(
                 tmdb_id=r.get("id"),
@@ -105,7 +110,7 @@ def candidates_from_search(search_resp: dict, media_type: str) -> List[Candidate
                 original_title=r.get(orig_field, "") or "",
                 year=_year_from_date(r.get(date_field)),
                 overview_length=_overview_len(r.get("overview")),
-                media_type=media_type,
+                media_type=effective_type,
             )
         )
     return candidates
