@@ -1,5 +1,7 @@
 """planner 测试"""
 
+import os
+
 import pytest
 
 from melodyi_filebot.planner import ParsedFile, parse_filename
@@ -206,3 +208,92 @@ class TestBuildPlanMovie:
         # 仍创建 movie 目录
         assert any(op.type == "mkdir" for op in result.operations)
         assert any("未找到视频文件" in w for w in result.warnings)
+
+
+class TestPathNormalization:
+    """输入路径归一化测试
+
+    覆盖：末尾斜杠、混合分隔符、源/目标路径一致性。
+    断言用「路径已归一化」(normpath 幂等) 判断，平台无关。
+    """
+
+    def test_tv_dest_root_trailing_slash_normalized(self, tmp_path):
+        """dest_root 带尾斜杠不应产生双分隔符"""
+        show = ShowSummary(
+            tmdb_id=1, title="t", original_title="t", year=2020,
+            total_seasons=1, total_episodes=1,
+            seasons=[SeasonSummary(season_number=1, name="S1", episode_count=1)],
+        )
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "t S01E01.mkv"
+        f.write_bytes(b"x")
+        # 带平台分隔符尾斜杠
+        dest = str(tmp_path / "dest") + os.sep
+        result = build_plan_tv(files=[str(f)], show=show, dest_root=dest)
+        for op in result.operations:
+            assert op.path == os.path.normpath(op.path), f"路径未归一化: {op.path!r}"
+
+    def test_tv_dest_root_forward_slash_trailing_normalized(self, tmp_path):
+        """dest_root 以正斜杠结尾（跨平台输入）也应归一化"""
+        show = ShowSummary(
+            tmdb_id=1, title="t", original_title="t", year=2020,
+            total_seasons=1, total_episodes=1,
+            seasons=[SeasonSummary(season_number=1, name="S1", episode_count=1)],
+        )
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "t S01E01.mkv"
+        f.write_bytes(b"x")
+        dest = str(tmp_path / "dest") + "/"
+        result = build_plan_tv(files=[str(f)], show=show, dest_root=dest)
+        for op in result.operations:
+            assert op.path == os.path.normpath(op.path), f"路径未归一化: {op.path!r}"
+
+    def test_tv_move_source_normalized(self, tmp_path):
+        """move 的 source 路径应归一化"""
+        show = ShowSummary(
+            tmdb_id=1, title="t", original_title="t", year=2020,
+            total_seasons=1, total_episodes=1,
+            seasons=[SeasonSummary(season_number=1, name="S1", episode_count=1)],
+        )
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "t S01E01.mkv"
+        f.write_bytes(b"x")
+        result = build_plan_tv(files=[str(f)], show=show, dest_root=str(tmp_path / "dest"))
+        moves = [op for op in result.operations if op.type == "move"]
+        assert moves
+        assert moves[0].source == os.path.normpath(moves[0].source)
+
+    def test_movie_dest_root_trailing_slash_normalized(self, tmp_path):
+        """电影计划同样归一化 dest_root 尾斜杠"""
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "某电影.2020.mkv"
+        f.write_bytes(b"x")
+        movie = CandidateSummary(
+            tmdb_id=123, title="某电影", original_title="Mov", year=2020,
+            overview_length=50, media_type="movie",
+        )
+        dest = str(tmp_path / "dest") + os.sep
+        result = build_plan_movie(files=[str(f)], movie=movie, dest_root=dest)
+        for op in result.operations:
+            assert op.path == os.path.normpath(op.path), f"路径未归一化: {op.path!r}"
+
+    def test_paths_use_platform_separator(self, tmp_path):
+        """归一化后路径使用平台原生分隔符（无混合 / 与 \）"""
+        show = ShowSummary(
+            tmdb_id=1, title="t", original_title="t", year=2020,
+            total_seasons=1, total_episodes=1,
+            seasons=[SeasonSummary(season_number=1, name="S1", episode_count=1)],
+        )
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "t S01E01.mkv"
+        f.write_bytes(b"x")
+        result = build_plan_tv(files=[str(f)], show=show, dest_root=str(tmp_path / "dest") + "/")
+        for op in result.operations:
+            # 归一化后不应再含另一种分隔符
+            if os.altsep:
+                assert os.altsep not in op.path, f"路径含非原生分隔符: {op.path!r}"

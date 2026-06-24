@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from pathlib import Path
 from typing import List, Optional
@@ -155,8 +156,10 @@ def build_plan_tv(
     operations: List[PlanOperation] = []
     warnings: List[str] = []
 
+    # 归一化目标根目录：去尾斜杠、折叠重复分隔符、转平台原生分隔符
+    dest_root = os.path.normpath(dest_root)
     show_folder = _show_folder(show)
-    show_dir = f"{dest_root}/{show_folder}"
+    show_dir = os.path.join(dest_root, show_folder)
     operations.append(PlanOperation(type="mkdir", path=show_dir))
 
     created_seasons: set = set()
@@ -167,7 +170,7 @@ def build_plan_tv(
             logger.warning("无法解析集号: %s", f)
             continue
         season = parsed.season if parsed.season is not None else 1
-        season_dir = f"{show_dir}/{_season_folder(season)}"
+        season_dir = os.path.join(show_dir, _season_folder(season))
         if season not in created_seasons:
             operations.append(PlanOperation(type="mkdir", path=season_dir))
             created_seasons.add(season)
@@ -175,8 +178,8 @@ def build_plan_tv(
         target_name = _episode_filename(
             show, season, parsed.episode, parsed.episode_end, parsed.part, parsed.ext
         )
-        target = f"{season_dir}/{target_name}"
-        operations.append(PlanOperation(type="move", source=f, path=target))
+        target = os.path.join(season_dir, target_name)
+        operations.append(PlanOperation(type="move", source=os.path.normpath(f), path=target))
 
     logger.info(
         "构建剧集计划完成: show=%s, 操作数=%d, 警告数=%d",
@@ -202,9 +205,10 @@ def build_plan_movie(
     operations: List[PlanOperation] = []
     warnings: List[str] = []
 
+    dest_root = os.path.normpath(dest_root)
     year = f" ({movie.year})" if movie.year else ""
     folder = _sanitize(f"{movie.title}{year} [tmdbid-{movie.tmdb_id}]")
-    movie_dir = f"{dest_root}/{folder}"
+    movie_dir = os.path.join(dest_root, folder)
     operations.append(PlanOperation(type="mkdir", path=movie_dir))
 
     if not files:
@@ -214,8 +218,8 @@ def build_plan_movie(
         return BuildPlanResult(operations=operations, spec_applied="standard", warnings=warnings)
 
     target_name = _sanitize(f"{movie.title}{year}") + Path(files[0]).suffix
-    target = f"{movie_dir}/{target_name}"
-    operations.append(PlanOperation(type="move", source=files[0], path=target))
+    target = os.path.join(movie_dir, target_name)
+    operations.append(PlanOperation(type="move", source=os.path.normpath(files[0]), path=target))
     for extra in files[1:]:
         warnings.append(f"电影存在多个视频文件，已忽略: {extra}")
         logger.warning("电影多文件忽略: %s", extra)
