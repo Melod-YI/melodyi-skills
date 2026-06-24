@@ -111,7 +111,34 @@ class TestSeasonEpisodes:
         assert eps[0].episode_number == 1
         assert eps[0].overview_available is True
 
-    def test_get_season_episodes_empty(self):
+    def test_get_season_episodes_includes_runtime(self):
+        """集摘要应包含 runtime（分钟）"""
+        mock_seasons = MagicMock()
+        mock_seasons.info.return_value = {
+            "episodes": [
+                {"episode_number": 1, "name": "第一集", "air_date": "2022-07-02", "overview": "x" * 50, "runtime": 24},
+                {"episode_number": 2, "name": "第二集", "air_date": "2022-07-09", "overview": "x" * 50, "runtime": 23},
+            ]
+        }
+        with patch("melodyi_filebot.tmdb.tmdbsimple.TV_Seasons", return_value=mock_seasons):
+            eps = tmdb.get_season_episodes(46260, 1, language="zh-CN")
+        assert len(eps) == 2
+        assert eps[0].episode_number == 1
+        assert eps[0].overview_available is True
+        assert eps[0].runtime == 24
+        assert eps[1].runtime == 23
+
+    def test_get_season_episodes_runtime_none_when_missing(self):
+        """TMDB 无 runtime 字段时为 None"""
+        mock_seasons = MagicMock()
+        mock_seasons.info.return_value = {
+            "episodes": [
+                {"episode_number": 1, "name": "第一集", "overview": "x" * 50},
+            ]
+        }
+        with patch("melodyi_filebot.tmdb.tmdbsimple.TV_Seasons", return_value=mock_seasons):
+            eps = tmdb.get_season_episodes(46260, 1)
+        assert eps[0].runtime is None
         mock_seasons = MagicMock()
         mock_seasons.info.return_value = {"episodes": []}
         with patch("melodyi_filebot.tmdb.tmdbsimple.TV_Seasons", return_value=mock_seasons):

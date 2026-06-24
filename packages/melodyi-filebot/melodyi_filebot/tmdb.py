@@ -123,6 +123,7 @@ def get_season_episodes(
             name=e.get("name", "") or "",
             air_date=e.get("air_date"),
             overview_length=len(e.get("overview") or ""),
+            runtime=e.get("runtime"),
         )
         for e in eps
     ]

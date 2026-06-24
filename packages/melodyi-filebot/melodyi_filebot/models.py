@@ -39,6 +39,7 @@ class EpisodeBrief(BaseModel):
     name: str
     air_date: Optional[str] = None
     overview_length: int = 0
+    runtime: Optional[int] = None  # 时长（分钟），取自 TMDB runtime 字段
 
     @property
     def overview_available(self) -> bool:
@@ -108,3 +109,42 @@ class PlanMap(BaseModel):
     tmdb_id: int
     language: str = "zh-CN"
     mappings: List[FileMapping] = Field(default_factory=list)
+
+
+class TreeNode(BaseModel):
+    """路径分析树节点
+
+    目录节点：children 非空，video_count 为自身及子树累计视频数；
+    文件节点：is_video 标记，视频时 duration 为 "HH:MM:SS"。
+    """
+
+    name: str
+    type: str  # "dir" | "file"
+    path: str
+    video_count: int = 0  # 目录：子树累计视频数
+    is_video: bool = False  # 文件：是否视频
+    duration_seconds: Optional[float] = None  # 文件视频时长（秒，原始值；展示时再格式化）
+    children: Optional[List["TreeNode"]] = None  # 目录：子节点
+
+
+class PathAnalysis(BaseModel):
+    """analyze_path 结果
+
+    正常情况：truncated=False，tree 为完整树（视频带时长）。
+    命中告警（深度≥阈值 或 文件数超阈值）：truncated=True，tree=None，
+    仅返回概要（by_ext / by_depth）。
+    """
+
+    root: str
+    truncated: bool
+    total_files: int = 0
+    total_videos: int = 0
+    total_dirs: int = 0
+    max_depth: int = 0  # 最深目录层，根目录=1
+    tree: Optional[TreeNode] = None
+    warnings: List[str] = Field(default_factory=list)
+    by_ext: Optional[dict] = None  # 截断时：扩展名 -> 文件数
+    by_depth: Optional[dict] = None  # 截断时：目录层(str) -> 目录数
+
+
+TreeNode.model_rebuild()

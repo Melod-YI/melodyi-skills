@@ -57,8 +57,34 @@ class TestCliFetchSummary:
         # 不应输出完整 overview 原文（摘要只含 length）
         assert "overview_length" in result.output or "19" in result.output
 
-    def test_fetch_summary_episodes_flag(self, tmdb_show_detail):
-        from melodyi_filebot.models import ShowSummary, SeasonSummary, EpisodeBrief
+    def test_fetch_summary_season_only_skips_show(self):
+        """指定 --season 时只拉取该季集列表，不搜索整剧"""
+        from melodyi_filebot.models import EpisodeBrief
+        eps = [
+            EpisodeBrief(episode_number=1, name="第一集", overview_length=50, runtime=24),
+            EpisodeBrief(episode_number=2, name="第二集", overview_length=0, runtime=None),
+        ]
+        runner = CliRunner()
+        with patch("melodyi_filebot.cli.tmdb.get_season_episodes", return_value=eps) as mock_eps, \
+             patch("melodyi_filebot.cli.tmdb.get_show_summary") as mock_show:
+            result = runner.invoke(cli, ["fetch-summary", "46260", "--season", "1"])
+        assert result.exit_code == 0
+        # 只拉季集，不搜整剧
+        mock_eps.assert_called_once_with(46260, 1, language="zh-CN")
+        mock_show.assert_not_called()
+        # 输出含表头解释
+        assert "时长" in result.output
+        assert "简介长度" in result.output
+        # 有 runtime 的集显示分钟数，无 runtime 显示缺失说明（不是 'runtime=未知'）
+        assert "24" in result.output
+        assert "无数据" in result.output
+        assert "runtime=未知" not in result.output
+        # overview_len 单元格只显示数字，不含 'overview_len=' 这种英文标签
+        assert "overview_len=" not in result.output
+
+    def test_fetch_summary_show_only_when_no_season(self):
+        """不带 --season 时输出整剧摘要（不变更原行为）"""
+        from melodyi_filebot.models import ShowSummary, SeasonSummary
         s = ShowSummary(
             tmdb_id=46260, title="莉可丽丝", original_title="リコリス",
             year=2022, total_seasons=1, total_episodes=2,
@@ -66,16 +92,80 @@ class TestCliFetchSummary:
             seasons=[SeasonSummary(season_number=1, name="S1", episode_count=2)],
             episode_groups=[],
         )
-        eps = [EpisodeBrief(episode_number=1, name="第一集", overview_length=50)]
-        with patch("melodyi_filebot.cli.tmdb.get_show_summary", return_value=s), \
-             patch("melodyi_filebot.cli.tmdb.get_season_episodes", return_value=eps):
+        with patch("melodyi_filebot.cli.tmdb.get_show_summary", return_value=s):
             runner = CliRunner()
-            result = runner.invoke(cli, ["fetch-summary", "46260", "--episodes", "1"])
+            result = runner.invoke(cli, ["fetch-summary", "46260"])
         assert result.exit_code == 0
-        assert "第一集" in result.output
+        assert "莉可丽丝" in result.output
 
 
 from pathlib import Path
+
+
+class TestCliAnalyze:
+    """analyze 子命令测试"""
+
+    def test_analyze_help(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["analyze", "--help"])
+        assert result.exit_code == 0
+        assert "path" in result.output
+
+    def test_analyze_prints_tree(self, tmp_path):
+        (tmp_path / "a.mkv").write_bytes(b"x")
+        (tmp_path / "Season 1").mkdir()
+        (tmp_path / "Season 1" / "ep01.mkv").write_bytes(b"x")
+        with patch("melodyi_filebot.cli.analyze_path") as mock_analyze:
+            from melodyi_filebot.models import PathAnalysis, TreeNode
+            mock_analyze.return_value = PathAnalysis(
+                root=str(tmp_path), truncated=False,
+                total_files=2, total_videos=2, total_dirs=1, max_depth=2,
+                tree=TreeNode(name=tmp_path.name, type="dir", path=str(tmp_path),
+                              video_count=2, children=[]),
+            )
+            runner = CliRunner()
+            result = runner.invoke(cli, ["analyze", str(tmp_path), "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["truncated"] is False
+        assert data["total_videos"] == 2
+
+    def test_analyze_default_text_output(self, tmp_path):
+        """默认（不加 --json）输出树状文本，首层显示绝对路径"""
+        with patch("melodyi_filebot.cli.analyze_path") as mock_analyze:
+            from melodyi_filebot.models import PathAnalysis, TreeNode
+            mock_analyze.return_value = PathAnalysis(
+                root=str(tmp_path), truncated=False,
+                total_files=1, total_videos=1, total_dirs=0, max_depth=1,
+                tree=TreeNode(name="movie.mp4", type="file", path=str(tmp_path / "movie.mp4"),
+                              is_video=True, duration_seconds=5400.0),
+            )
+            runner = CliRunner()
+            result = runner.invoke(cli, ["analyze", str(tmp_path)])
+        assert result.exit_code == 0
+        # 首层绝对路径
+        assert str(tmp_path / "movie.mp4") in result.output
+        # 时长为时分秒
+        assert "(01:30:00)" in result.output
+        # 不应是 JSON
+        assert result.output.lstrip()[0] != "{"
+
+    def test_analyze_truncated_summary(self, tmp_path):
+        with patch("melodyi_filebot.cli.analyze_path") as mock_analyze:
+            from melodyi_filebot.models import PathAnalysis
+            mock_analyze.return_value = PathAnalysis(
+                root=str(tmp_path), truncated=True,
+                total_files=6000, total_videos=6000, max_depth=6,
+                warnings=["文件总数 6000 超过 5000，数量过多"],
+                by_ext={".mkv": 6000},
+            )
+            runner = CliRunner()
+            result = runner.invoke(cli, ["analyze", str(tmp_path), "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["truncated"] is True
+        assert data["tree"] is None
+        assert data["by_ext"][".mkv"] == 6000
 
 
 class TestCliBuildPlan:

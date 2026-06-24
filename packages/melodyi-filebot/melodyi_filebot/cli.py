@@ -12,6 +12,7 @@ import pathlib
 import click
 
 from melodyi_filebot import __version__, config, tmdb
+from melodyi_filebot.structure import analyze_path, render_text
 from melodyi_filebot.planner import (
     build_plan_tv, build_plan_movie,
     build_plan_tv_from_map, build_plan_movie_from_map,
@@ -51,26 +52,69 @@ def search(query, media_type, language, year):
 @cli.command(name="fetch-summary")
 @click.argument("tmdb_id", type=int)
 @click.option("--language", "-l", default="zh-CN")
-@click.option("--episodes", type=int, default=None, help="展开某季的集列表")
-def fetch_summary(tmdb_id, language, episodes):
-    """获取剧摘要（不含完整 overview）"""
-    logger.info("fetch-summary: id=%s", tmdb_id)
+@click.option("--season", type=int, default=None,
+              help="只拉取并展示某一季的集列表（不再搜索整剧，用于确认命中后逐层下钻）")
+def fetch_summary(tmdb_id, language, season):
+    """获取剧摘要（不含完整 overview）
+
+    不带 --season：输出整剧摘要（季列表、剧集组等）。
+    带 --season N：只拉取第 N 季的集列表（含每集名称与时长），不再搜索整剧——
+    适合先确认整剧命中，再下钻看某季具体集信息。
+    """
+    logger.info("fetch-summary: id=%s season=%s", tmdb_id, season)
+
+    # 下钻模式：只拉季集，不搜整剧
+    if season is not None:
+        eps = tmdb.get_season_episodes(tmdb_id, season, language=language)
+        _print_season_episodes(tmdb_id, season, eps)
+        return
+
     s = tmdb.get_show_summary(tmdb_id, language=language)
     click.echo(f"tmdb_id={s.tmdb_id} | {s.title} ({s.year}) | original={s.original_title}")
     click.echo(f"季数={s.total_seasons} 总集数={s.total_episodes} "
                f"overview_available={s.overview_available} overview_length={s.overview_length}")
-    for season in s.seasons:
-        click.echo(f"  S{season.season_number:02d} {season.name} | 集数={season.episode_count} "
-                   f"overview_available={season.overview_available}")
+    for season_obj in s.seasons:
+        click.echo(f"  S{season_obj.season_number:02d} {season_obj.name} | 集数={season_obj.episode_count} "
+                   f"overview_available={season_obj.overview_available}")
     if s.episode_groups:
         click.echo("剧集组:")
         for g in s.episode_groups:
             click.echo(f"  group_id={g.id} | {g.name} | type={g.type}")
-    if episodes is not None:
-        eps = tmdb.get_season_episodes(tmdb_id, episodes, language=language)
-        click.echo(f"第 {episodes} 季集列表:")
-        for e in eps:
-            click.echo(f"  E{e.episode_number:02d} {e.name} | overview_len={e.overview_length}")
+
+
+def _print_season_episodes(tmdb_id: int, season: int, eps) -> None:
+    """打印某季集列表（带表头解释列含义）"""
+    click.echo(f"TMDB id={tmdb_id} 第 {season} 季 集列表")
+    click.echo("列含义：集号 | 名称 | 时长(分钟) | 简介长度")
+    if not eps:
+        click.echo("（无集数据）")
+        return
+    for e in eps:
+        runtime = str(e.runtime) if e.runtime is not None else "无数据"
+        click.echo(f"E{e.episode_number:02d} | {e.name} | {runtime} | {e.overview_length}")
+
+
+@cli.command()
+@click.argument("path", metavar="path")
+@click.option("--json", "as_json", is_flag=True, help="以 JSON 输出（视频时长为秒数），默认输出树状文本")
+@click.option("--out", type=click.Path(), default=None, help="结果输出文件路径（默认仅打印到 stdout）")
+def analyze(path, as_json, out):
+    """分析文件夹/文件路径结构（agent 执行的第一步）
+
+    默认输出树状文本：首层显示绝对路径，深层只显示名字；视频时长用 HH:MM:SS，
+    目录标注子树累计视频数。加 --json 输出 JSON（时长为秒数，含每个节点的完整路径）。
+    目录深度≥5 或文件总数>5000 时，只返回概要并停止（避免对超大树逐个取时长）。
+    """
+    logger.info("analyze: path=%s json=%s", path, as_json)
+    result = analyze_path(path)
+    if as_json:
+        output = result.model_dump(mode="json")
+        text = json.dumps(output, ensure_ascii=False, indent=2)
+    else:
+        text = render_text(result)
+    click.echo(text)
+    if out:
+        pathlib.Path(out).write_text(text, encoding="utf-8")
 
 
 @cli.command(name="build-plan")
