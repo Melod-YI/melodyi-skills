@@ -6,6 +6,28 @@ from pathlib import Path
 import pytest
 
 
+def pytest_addoption(parser):
+    """添加 --run-integration 选项以启用真实 API 集成测试"""
+    parser.addoption(
+        "--run-integration",
+        action="store_true",
+        default=False,
+        help="启用调用真实 TMDB API 的集成测试",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """未指定 --run-integration 时，跳过标记为 integration 的测试"""
+    if config.getoption("--run-integration"):
+        return
+    skip_integration = pytest.mark.skip(
+        reason="集成测试默认跳过，加 --run-integration 启用（需真实 TMDB API key）"
+    )
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip_integration)
+
+
 @pytest.fixture
 def tmdb_show_detail() -> dict:
     """TV.info 响应快照（莉可丽丝，简化）"""

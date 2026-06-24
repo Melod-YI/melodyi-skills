@@ -28,3 +28,6 @@ packages = ["melodyi_filebot"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: 调用真实 TMDB API 的集成测试（默认 skip，需 --run-integration）",
+]

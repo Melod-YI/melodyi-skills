@@ -59,7 +59,13 @@ class TestSearch:
         assert len(cands) == 2
 
     def test_search_raises_without_key(self, monkeypatch):
+        """未配置 key 时应抛 RuntimeError
+
+        注意：必须同时 mock load_tmdb_api_key 返回 None，
+        否则 _ensure_key 会重新读取真实配置文件（环境里可能已配 key）。
+        """
         monkeypatch.setattr(tmdb, "_api_key", None)
+        monkeypatch.setattr(tmdb.config, "load_tmdb_api_key", lambda: None)
         with pytest.raises(RuntimeError, match="TMDB_API_KEY"):
             tmdb.search("x", media_type="tv")
 
