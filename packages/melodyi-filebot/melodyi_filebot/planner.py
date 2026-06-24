@@ -140,6 +140,7 @@ def build_plan_tv(
     show: ShowSummary,
     dest_root: str,
     language: str = "zh-CN",
+    season_hint: Optional[int] = None,
 ) -> BuildPlanResult:
     """构建剧集重命名与目录整理计划（标准流程，P0 不含 NFO）
 
@@ -148,11 +149,13 @@ def build_plan_tv(
         show: TMDB 剧摘要
         dest_root: 目标媒体根目录
         language: 语言
+        season_hint: 季提示。文件名未带季标记时用此季号，而非默认 1；
+            文件名有显式季标记（如 S00 特别篇）仍以文件名为准。
 
     Returns:
         BuildPlanResult，含 mkdir/move 操作与警告
     """
-    logger.info("构建剧集计划开始: show=%s, 文件数=%d", show.title, len(files))
+    logger.info("构建剧集计划开始: show=%s, 文件数=%d, season_hint=%s", show.title, len(files), season_hint)
     operations: List[PlanOperation] = []
     warnings: List[str] = []
 
@@ -169,7 +172,13 @@ def build_plan_tv(
             warnings.append(f"无法解析集号，跳过: {f}")
             logger.warning("无法解析集号: %s", f)
             continue
-        season = parsed.season if parsed.season is not None else 1
+        # 季号优先级：文件名显式季标记 > season_hint > 默认 1
+        if parsed.season is not None:
+            season = parsed.season
+        elif season_hint is not None:
+            season = season_hint
+        else:
+            season = 1
         season_dir = os.path.join(show_dir, _season_folder(season))
         if season not in created_seasons:
             operations.append(PlanOperation(type="mkdir", path=season_dir))

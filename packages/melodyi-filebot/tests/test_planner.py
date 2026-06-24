@@ -297,3 +297,66 @@ class TestPathNormalization:
             # 归一化后不应再含另一种分隔符
             if os.altsep:
                 assert os.altsep not in op.path, f"路径含非原生分隔符: {op.path!r}"
+
+
+class TestSeasonHint:
+    """--season 季提示测试：文件名无季标记时用提示季号"""
+
+    def _show(self):
+        return ShowSummary(
+            tmdb_id=1, title="剧", original_title="x", year=2020,
+            total_seasons=2, total_episodes=24,
+            seasons=[
+                SeasonSummary(season_number=1, name="S1", episode_count=12),
+                SeasonSummary(season_number=2, name="S2", episode_count=12),
+            ],
+        )
+
+    def test_season_hint_applied_to_seasonless_files(self, tmp_path):
+        """文件名无季标记（方括号集号），--season 让它们落到指定季"""
+        src = tmp_path / "src"
+        src.mkdir()
+        f1 = src / "Amagami [01].mkv"
+        f2 = src / "Amagami [02].mkv"
+        f1.write_bytes(b"x")
+        f2.write_bytes(b"x")
+        result = build_plan_tv(
+            files=[str(f1), str(f2)], show=self._show(),
+            dest_root=str(tmp_path / "dest"), season_hint=2,
+        )
+        moves = [op for op in result.operations if op.type == "move"]
+        assert len(moves) == 2
+        assert all("Season 02" in op.path for op in moves)
+        assert all("S02E0" in op.path for op in moves)
+
+    def test_explicit_season_in_filename_wins_over_hint(self, tmp_path):
+        """文件名有显式季标记（如 S00 特别篇），--season 不覆盖"""
+        src = tmp_path / "src"
+        src.mkdir()
+        special = src / "剧 S00E01.mkv"
+        normal = src / "剧 [02].mkv"
+        special.write_bytes(b"x")
+        normal.write_bytes(b"x")
+        result = build_plan_tv(
+            files=[str(special), str(normal)], show=self._show(),
+            dest_root=str(tmp_path / "dest"), season_hint=2,
+        )
+        moves = {op.source: op.path for op in result.operations if op.type == "move"}
+        assert "Season 00" in moves[str(special)]
+        assert "S00E01" in moves[str(special)]
+        assert "Season 02" in moves[str(normal)]
+        assert "S02E02" in moves[str(normal)]
+
+    def test_no_hint_defaults_to_season1(self, tmp_path):
+        """无 --season 且文件名无季标记 → 默认 Season 01"""
+        src = tmp_path / "src"
+        src.mkdir()
+        f = src / "剧 [01].mkv"
+        f.write_bytes(b"x")
+        result = build_plan_tv(
+            files=[str(f)], show=self._show(),
+            dest_root=str(tmp_path / "dest"),
+        )
+        moves = [op for op in result.operations if op.type == "move"]
+        assert "Season 01" in moves[0].path
+        assert "S01E01" in moves[0].path

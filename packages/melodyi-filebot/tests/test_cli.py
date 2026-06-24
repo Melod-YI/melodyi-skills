@@ -224,3 +224,48 @@ class TestExecuteDefaultSnapshot:
         assert not snaps_dir.exists() or not any(snaps_dir.iterdir())
         # dry-run 不应改动文件系统
         assert f.exists()
+
+
+class TestBuildPlanSeason:
+    """build-plan --season 季提示测试"""
+
+    def test_season_flag_routes_files_to_hint_season(self, tmp_path):
+        from melodyi_filebot.models import ShowSummary, SeasonSummary
+        show_dir = tmp_path / "src"
+        show_dir.mkdir()
+        (show_dir / "Amagami [01].mkv").write_bytes(b"x")
+        s = ShowSummary(
+            tmdb_id=1, title="剧", original_title="x", year=2020,
+            total_seasons=2, total_episodes=24,
+            seasons=[
+                SeasonSummary(season_number=1, name="S1", episode_count=12),
+                SeasonSummary(season_number=2, name="S2", episode_count=12),
+            ],
+        )
+        with patch("melodyi_filebot.cli.tmdb.get_show_summary", return_value=s):
+            runner = CliRunner()
+            plan_path = str(tmp_path / "plan.json")
+            result = runner.invoke(cli, [
+                "build-plan", "--show-id", "1", "--season", "2",
+                "--source", str(show_dir), "--dest", str(tmp_path / "dest"),
+                "--out", plan_path,
+            ])
+        assert result.exit_code == 0, result.output
+        plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+        moves = [op for op in plan["operations"] if op["type"] == "move"]
+        assert moves
+        assert all("Season 02" in op["path"] for op in moves)
+        assert all("S02E01" in op["path"] for op in moves)
+
+    def test_season_flag_rejected_for_movie(self, tmp_path):
+        """--season 仅适用于剧集，电影用应报错"""
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "m.mkv").write_bytes(b"x")
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "build-plan", "--movie-id", "1", "--season", "2",
+            "--source", str(src), "--dest", str(tmp_path / "dest"),
+        ])
+        assert result.exit_code != 0
+        assert "剧集" in result.output or "show" in result.output.lower()

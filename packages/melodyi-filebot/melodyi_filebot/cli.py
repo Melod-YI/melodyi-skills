@@ -73,16 +73,19 @@ def fetch_summary(tmdb_id, language, episodes):
 @click.option("--source", required=True, help="源目录")
 @click.option("--dest", required=True, help="目标根目录")
 @click.option("--language", "-l", default="zh-CN")
+@click.option("--season", type=int, default=None, help="季提示：文件名未带季标记时按此季号归类（如源目录是某一季但文件名无 S 标记）。文件名有显式季标记仍以文件名为准")
 @click.option("--out", type=click.Path(), default=None, help="计划输出文件路径")
-def build_plan(show_id, movie_id, source, dest, language, out):
+def build_plan(show_id, movie_id, source, dest, language, season, out):
     """构建重命名与目录整理计划"""
-    logger.info("build-plan: show_id=%s movie_id=%s", show_id, movie_id)
+    logger.info("build-plan: show_id=%s movie_id=%s season=%s", show_id, movie_id, season)
     if bool(show_id) == bool(movie_id):
         raise click.UsageError("必须且只能指定 --show-id 或 --movie-id 之一")
+    if season is not None and not show_id:
+        raise click.UsageError("--season 仅适用于剧集（--show-id）")
     files = fsops.scan_video_files(source)
     if show_id:
         show = tmdb.get_show_summary(show_id, language=language)
-        result = build_plan_tv(files, show, dest, language=language)
+        result = build_plan_tv(files, show, dest, language=language, season_hint=season)
     else:
         from melodyi_filebot.models import CandidateSummary
         movie = tmdb.get_movie_summary(movie_id, language=language)
