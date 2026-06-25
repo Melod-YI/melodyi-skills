@@ -57,13 +57,49 @@ class TestSummarize:
             "seasons": [],
             "episode_groups": {
                 "results": [
-                    {"id": "abc", "name": "HD Remaster", "type": 1}
+                    {"id": "abc", "name": "HD Remaster", "type": 1, "episode_count": 19}
                 ]
             },
         }
         s = summarize.show_summary_from_detail(detail)
         assert len(s.episode_groups) == 1
         assert s.episode_groups[0].id == "abc"
+        assert s.episode_groups[0].episode_count == 19
+
+    def test_episode_group_from_detail(self):
+        """剧集组详情解析：嵌套子组 + 集列表（集带季号）"""
+        raw = {
+            "id": "g1", "name": "All Episodes + OVAs", "type": 6,
+            "episode_count": 19, "group_count": 2,
+            "groups": [
+                {"id": "s1", "name": "Lycoris Recoil", "order": 0, "episodes": [
+                    {"season_number": 1, "episode_number": 1, "name": "慢慢来",
+                     "air_date": "2022-07-02", "runtime": 24, "overview": "x" * 50}
+                ]},
+                {"id": "s2", "name": "OVAs", "order": 1, "episodes": []},
+            ],
+        }
+        d = summarize.episode_group_from_detail(raw)
+        assert d.id == "g1"
+        assert d.type == 6
+        assert d.episode_count == 19
+        assert d.group_count == 2
+        assert len(d.sub_groups) == 2
+        assert d.sub_groups[0].name == "Lycoris Recoil"
+        e = d.sub_groups[0].episodes[0]
+        assert e.season_number == 1
+        assert e.episode_number == 1
+        assert e.runtime == 24
+        assert e.overview_length == 50
+        # 空子组也保留
+        assert d.sub_groups[1].episodes == []
+
+    def test_episode_group_from_detail_empty(self):
+        """无 groups 的剧集组安全兜底"""
+        d = summarize.episode_group_from_detail({"id": "g", "name": "n", "type": 1})
+        assert d.id == "g"
+        assert d.sub_groups == []
+        assert d.episode_count == 0
 
     def test_candidates_from_search(self):
         search_resp = {

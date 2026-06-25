@@ -17,7 +17,8 @@ class TestCliSearch:
         assert result.exit_code == 0
         assert "query" in result.output
 
-    def test_search_tv(self):
+    def test_search_tv_table_style(self):
+        """search 文本输出为 表头+内容 表格，含列含义行"""
         from melodyi_filebot.models import CandidateSummary
         cands = [CandidateSummary(
             tmdb_id=46260, title="莉可丽丝", original_title="リコリス",
@@ -27,14 +28,54 @@ class TestCliSearch:
             runner = CliRunner()
             result = runner.invoke(cli, ["search", "莉可丽丝", "--type", "tv"])
         assert result.exit_code == 0
+        # 表头行（纯列名，无「列含义」前缀）
+        assert "标题(年份)" in result.output
+        assert "列含义" not in result.output
+        # 内容行含 tmdb_id 与标题
+        assert "46260" in result.output
         assert "莉可丽丝" in result.output
+        assert "リコリス" in result.output
 
     def test_search_no_results(self):
         with patch("melodyi_filebot.cli.tmdb.search", return_value=[]):
             runner = CliRunner()
             result = runner.invoke(cli, ["search", "不存在的剧"])
         assert result.exit_code == 0
-        assert "未找到" in result.output or "0" in result.output
+        assert "未找到" in result.output
+
+
+class TestCliLogging:
+    """日志风格测试：默认静默，--verbose 才输出 INFO 日志"""
+
+    def test_default_silent(self):
+        """默认不输出 INFO 日志"""
+        with patch("melodyi_filebot.cli.tmdb.search", return_value=[]):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["search", "x"])
+        assert result.exit_code == 0
+        # 不应出现 INFO 级别日志行
+        assert "[INFO]" not in result.output
+        # 也不应出现 search 命令的入口日志文本
+        assert "search: query=" not in result.output
+
+    def test_verbose_shows_info_logs(self):
+        """--verbose 输出 INFO 日志"""
+        with patch("melodyi_filebot.cli.tmdb.search", return_value=[]):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["-v", "search", "x"])
+        assert result.exit_code == 0
+        assert "[INFO]" in result.output
+
+    def test_api_error_reported_cleanly(self):
+        """API 抛 RuntimeError 时友好报错，非 traceback"""
+        with patch("melodyi_filebot.cli.tmdb.search",
+                   side_effect=RuntimeError("TMDB_API_KEY 未配置")):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["search", "x"])
+        assert result.exit_code != 0
+        assert "TMDB_API_KEY" in result.output
+        # 不应出现 Python traceback
+        assert "Traceback" not in result.output
 
 
 class TestCliFetchSummary:
@@ -54,8 +95,49 @@ class TestCliFetchSummary:
             result = runner.invoke(cli, ["fetch-summary", "46260"])
         assert result.exit_code == 0
         assert "莉可丽丝" in result.output
-        # 不应输出完整 overview 原文（摘要只含 length）
-        assert "overview_length" in result.output or "19" in result.output
+        # 季列表为表头+内容表格（无「列含义」前缀）
+        assert "季号 | 名称" in result.output
+        assert "总集数" in result.output
+        assert "列含义" not in result.output
+        # 不应输出完整 overview 原文（摘要只含长度）
+        assert "overview_length" not in result.output
+
+    def test_default_omits_episode_groups(self, tmdb_show_detail):
+        """默认 fetch-summary 不输出剧集组信息"""
+        from melodyi_filebot.models import ShowSummary, SeasonSummary, EpisodeGroupBrief
+        s = ShowSummary(
+            tmdb_id=46260, title="莉可丽丝", original_title="リコリス", year=2022,
+            total_seasons=1, total_episodes=13,
+            seasons=[SeasonSummary(season_number=1, name="S1", episode_count=13)],
+            episode_groups=[EpisodeGroupBrief(id="g1", name="All Episodes + OVAs",
+                                              type=6, episode_count=19)],
+        )
+        with patch("melodyi_filebot.cli.tmdb.get_show_summary", return_value=s):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["fetch-summary", "46260"])
+        assert result.exit_code == 0
+        # 默认不输出剧集组
+        assert "剧集组" not in result.output
+        assert "All Episodes + OVAs" not in result.output
+
+    def test_with_episode_groups_flag(self, tmdb_show_detail):
+        """--episode-groups 输出剧集组表格，type 映射为可读名称"""
+        from melodyi_filebot.models import ShowSummary, SeasonSummary, EpisodeGroupBrief
+        s = ShowSummary(
+            tmdb_id=46260, title="莉可丽丝", original_title="リコリス", year=2022,
+            total_seasons=1, total_episodes=13,
+            seasons=[SeasonSummary(season_number=1, name="S1", episode_count=13)],
+            episode_groups=[EpisodeGroupBrief(id="g1", name="All Episodes + OVAs",
+                                              type=6, episode_count=19)],
+        )
+        with patch("melodyi_filebot.cli.tmdb.get_show_summary", return_value=s):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["fetch-summary", "46260", "--episode-groups"])
+        assert result.exit_code == 0
+        assert "剧集组" in result.output
+        assert "All Episodes + OVAs" in result.output
+        # type=6 映射为「制作顺序」，不出现裸数字 6 作为类型列
+        assert "制作顺序" in result.output
 
     def test_fetch_summary_season_only_skips_show(self):
         """指定 --season 时只拉取该季集列表，不搜索整剧"""
@@ -444,3 +526,158 @@ class TestDraftMapAndOverride:
         ])
         assert result.exit_code != 0
         assert "source" in result.output.lower() or "map" in result.output.lower()
+
+
+class TestCliBangumi:
+    """bangumi-search / bangumi-subject / bangumi-episodes 子命令测试"""
+
+    def _subject(self):
+        from melodyi_filebot.models import BangumiSubjectSummary
+        return BangumiSubjectSummary(
+            subject_id=364450, type=2, name="リコリス・リコイル", name_cn="莉可丽丝",
+            date="2022-07-02", eps=13, platform="TV", summary="x" * 50,
+            summary_length=50,
+        )
+
+    def _episode(self, desc="x" * 200):
+        from melodyi_filebot.models import BangumiEpisodeBrief
+        return BangumiEpisodeBrief(
+            episode_id=1111258, type=0, name="Easy does it", name_cn="慢慢来",
+            sort=1, ep=1, airdate="2022-07-02", duration="00:24:00",
+            desc=desc, desc_length=len(desc),
+        )
+
+    def test_search_help(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["bangumi-search", "--help"])
+        assert result.exit_code == 0
+        assert "keyword" in result.output
+
+    def test_search_text(self):
+        """文本输出为表格，且不含完整 summary（仅简介长度）"""
+        with patch("melodyi_filebot.cli.bangumi.search_anime",
+                   return_value=[self._subject()]):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["bangumi-search", "莉可丽丝"])
+        assert result.exit_code == 0
+        assert "bangumi_id | 中文名" in result.output
+        assert "列含义" not in result.output
+        assert "364450" in result.output
+        assert "莉可丽丝" in result.output
+        # 简介长度出现，但完整 summary 原文不出现
+        assert "50" in result.output
+        assert "x" * 50 not in result.output
+
+    def test_search_json(self):
+        """--json 输出完整 summary"""
+        with patch("melodyi_filebot.cli.bangumi.search_anime",
+                   return_value=[self._subject()]):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["bangumi-search", "x", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data[0]["subject_id"] == 364450
+        assert data[0]["summary"] == "x" * 50
+
+    def test_search_empty(self):
+        with patch("melodyi_filebot.cli.bangumi.search_anime", return_value=[]):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["bangumi-search", "不存在"])
+        assert result.exit_code == 0
+        assert "未找到" in result.output
+
+    def test_subject_text(self):
+        """单条详情文本不含完整 summary，仅简介长度"""
+        with patch("melodyi_filebot.cli.bangumi.get_subject", return_value=self._subject()):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["bangumi-subject", "364450"])
+        assert result.exit_code == 0
+        assert "莉可丽丝" in result.output
+        assert "简介长度" in result.output
+        assert "x" * 50 not in result.output
+
+    def test_subject_json(self):
+        """--json 输出完整 summary"""
+        with patch("melodyi_filebot.cli.bangumi.get_subject", return_value=self._subject()):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["bangumi-subject", "364450", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["subject_id"] == 364450
+        assert data["summary"] == "x" * 50
+
+    def test_episodes_text_no_full_desc(self):
+        """集列表文本为表头+内容表格，且不含完整 desc（仅简介长度）"""
+        with patch("melodyi_filebot.cli.bangumi.get_subject_episodes",
+                   return_value=[self._episode()]):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["bangumi-episodes", "364450"])
+        assert result.exit_code == 0
+        assert "集号 | 中文名" in result.output
+        assert "列含义" not in result.output
+        assert "慢慢来" in result.output
+        # 简介长度列存在，完整 desc 原文不出现
+        assert "简介长度" in result.output
+        assert "x" * 200 not in result.output
+
+    def test_episodes_json_full_desc(self):
+        """--json 输出完整 desc 不截断"""
+        with patch("melodyi_filebot.cli.bangumi.get_subject_episodes",
+                   return_value=[self._episode()]):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["bangumi-episodes", "364450", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data[0]["desc"] == "x" * 200
+
+    def test_episodes_empty(self):
+        with patch("melodyi_filebot.cli.bangumi.get_subject_episodes",
+                   return_value=[]):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["bangumi-episodes", "364450"])
+        assert result.exit_code == 0
+        assert "无" in result.output or "0" in result.output
+
+
+class TestCliEpisodeGroup:
+    """episode-group <group_id> 子命令测试"""
+
+    def _detail(self):
+        from melodyi_filebot.models import (
+            EpisodeGroupDetail, EpisodeGroupSub, EpisodeBrief,
+        )
+        return EpisodeGroupDetail(
+            id="g1", name="All Episodes + OVAs", type=6,
+            episode_count=14, group_count=2,
+            sub_groups=[
+                EpisodeGroupSub(name="Lycoris Recoil", episodes=[
+                    EpisodeBrief(episode_number=1, name="慢慢来", air_date="2022-07-02",
+                                 runtime=24, overview_length=50, season_number=1),
+                ]),
+                EpisodeGroupSub(name="OVAs", episodes=[]),
+            ],
+        )
+
+    def test_episode_group_text(self):
+        """按子组打印集列表，type 映射为可读名称，集号带季"""
+        with patch("melodyi_filebot.cli.tmdb.get_episode_group", return_value=self._detail()):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["episode-group", "g1"])
+        assert result.exit_code == 0
+        # 组头：name + type_name + 集数
+        assert "All Episodes + OVAs" in result.output
+        assert "制作顺序" in result.output
+        # 子组名
+        assert "Lycoris Recoil" in result.output
+        # 集行带 S{season}E{episode}（零填充，与季列表风格一致）
+        assert "S01E01" in result.output
+        assert "慢慢来" in result.output
+
+    def test_episode_group_json(self):
+        with patch("melodyi_filebot.cli.tmdb.get_episode_group", return_value=self._detail()):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["episode-group", "g1", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["id"] == "g1"
+        assert data["sub_groups"][0]["episodes"][0]["season_number"] == 1

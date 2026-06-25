@@ -12,7 +12,7 @@ from typing import List, Optional
 import tmdbsimple as tmdbsimple
 
 from melodyi_filebot import config
-from melodyi_filebot.models import CandidateSummary, ShowSummary, EpisodeBrief
+from melodyi_filebot.models import CandidateSummary, ShowSummary, EpisodeBrief, EpisodeGroupDetail
 from melodyi_filebot import summarize
 
 logger = logging.getLogger(__name__)
@@ -151,3 +151,27 @@ def get_movie_summary(tmdb_id: int, language: str = "zh-CN") -> CandidateSummary
     )
     logger.info("获取电影详情完成: id=%s", tmdb_id)
     return movie
+
+
+def get_episode_group(group_id: str, language: str = "zh-CN") -> EpisodeGroupDetail:
+    """获取剧集组详情（含子组与集列表）
+
+    用于非标场景1（如重置版归在剧集组）：取 group 的子组结构 + 每集信息。
+
+    Args:
+        group_id: TMDB 剧集组 ID
+        language: 语言
+
+    Returns:
+        EpisodeGroupDetail（子组 + 集列表，集带 season_number）
+    """
+    _ensure_key()
+    logger.info("获取剧集组详情开始: group_id=%s, lang=%s", group_id, language)
+    eg = tmdbsimple.TV_Episode_Groups(id=group_id)
+    detail = eg.info(language=language)
+    result = summarize.episode_group_from_detail(detail)
+    logger.info(
+        "获取剧集组详情完成: group_id=%s, 子组数=%d, 集数=%d",
+        group_id, result.group_count, result.episode_count,
+    )
+    return result

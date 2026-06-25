@@ -167,3 +167,35 @@ class TestMovieSummary:
         assert movie.title == "搏击俱乐部"
         assert movie.year == 1999
         assert movie.media_type == "movie"
+
+
+class TestEpisodeGroup:
+    """get_episode_group 测试"""
+
+    def test_get_episode_group(self):
+        mock_eg = MagicMock()
+        mock_eg.info.return_value = {
+            "id": "g1", "name": "All Episodes + OVAs", "type": 6,
+            "episode_count": 19, "group_count": 2,
+            "groups": [
+                {"name": "Lycoris Recoil", "episodes": [
+                    {"season_number": 1, "episode_number": 1, "name": "慢慢来",
+                     "air_date": "2022-07-02", "runtime": 24, "overview": "x" * 50}
+                ]},
+            ],
+        }
+        with patch("melodyi_filebot.tmdb.tmdbsimple.TV_Episode_Groups", return_value=mock_eg):
+            d = tmdb.get_episode_group("g1", language="zh-CN")
+        assert d.id == "g1"
+        assert d.type == 6
+        assert d.sub_groups[0].name == "Lycoris Recoil"
+        assert d.sub_groups[0].episodes[0].season_number == 1
+        mock_eg.info.assert_called_once_with(language="zh-CN")
+
+    def test_get_episode_group_passes_language(self):
+        mock_eg = MagicMock()
+        mock_eg.info.return_value = {"id": "g", "name": "n", "type": 1, "groups": []}
+        with patch("melodyi_filebot.tmdb.tmdbsimple.TV_Episode_Groups", return_value=mock_eg):
+            tmdb.get_episode_group("g", language="ja-JP")
+        _, kwargs = mock_eg.info.call_args
+        assert kwargs.get("language") == "ja-JP"

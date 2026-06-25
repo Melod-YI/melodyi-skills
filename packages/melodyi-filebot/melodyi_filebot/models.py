@@ -40,10 +40,23 @@ class EpisodeBrief(BaseModel):
     air_date: Optional[str] = None
     overview_length: int = 0
     runtime: Optional[int] = None  # 时长（分钟），取自 TMDB runtime 字段
+    season_number: Optional[int] = None  # 剧集组内集可跨季，需带季号；普通季集为 None
 
     @property
     def overview_available(self) -> bool:
         return self.overview_length >= 10
+
+
+# TMDB 剧集组 type 枚举（共 7 种，取自 TMDB API 文档）
+EPISODE_GROUP_TYPES = {
+    1: "首播顺序",
+    2: "绝对集号",
+    3: "DVD",
+    4: "数字版",
+    5: "剧情篇章",
+    6: "制作顺序",
+    7: "TV",
+}
 
 
 class EpisodeGroupBrief(BaseModel):
@@ -52,6 +65,75 @@ class EpisodeGroupBrief(BaseModel):
     id: str
     name: str
     type: int
+    episode_count: int = 0
+
+    @property
+    def type_name(self) -> str:
+        """type 数字 → 可读名称，未知值回退为数字字符串"""
+        return EPISODE_GROUP_TYPES.get(self.type, str(self.type))
+
+
+class EpisodeGroupSub(BaseModel):
+    """剧集组内的子组（一组可含多个子组，如正片 + OVA）"""
+
+    name: str
+    episodes: List[EpisodeBrief] = Field(default_factory=list)
+
+
+class EpisodeGroupDetail(BaseModel):
+    """剧集组详情"""
+
+    id: str
+    name: str
+    type: int
+    episode_count: int = 0
+    group_count: int = 0
+    sub_groups: List[EpisodeGroupSub] = Field(default_factory=list)
+
+    @property
+    def type_name(self) -> str:
+        return EPISODE_GROUP_TYPES.get(self.type, str(self.type))
+
+
+class BangumiSubjectSummary(BaseModel):
+    """Bangumi 条目摘要（搜索/详情共用）
+
+    与 TMDB overview 不同：bangumi summary 是填充源的核心价值，故完整保留
+    （下游 --with-bangumi 再决定如何压缩不进上下文）。
+    """
+
+    subject_id: int
+    type: int = 0  # 2=动画
+    name: str = ""  # 原文名
+    name_cn: str = ""  # 中文名
+    date: Optional[str] = None  # 放送日期 YYYY-MM-DD
+    eps: int = 0  # 总集数
+    platform: str = ""  # TV/WEB/...
+    summary: str = ""  # 完整简介
+    summary_length: int = 0
+
+    @property
+    def summary_available(self) -> bool:
+        return self.summary_length >= 10
+
+
+class BangumiEpisodeBrief(BaseModel):
+    """Bangumi 集摘要"""
+
+    episode_id: int
+    type: int = 0  # 0=本篇 1=特别篇 2=OP 3=ED 4=预告 5=MAD 6=其他 7=非正片
+    name: str = ""
+    name_cn: str = ""
+    sort: float = 0.0  # bangumi sort 可为小数（如 5.5）
+    ep: Optional[int] = None
+    airdate: Optional[str] = None
+    duration: Optional[str] = None  # "00:24:00"
+    desc: str = ""  # 集简介（对应 bangumi desc 字段）
+    desc_length: int = 0
+
+    @property
+    def desc_available(self) -> bool:
+        return self.desc_length >= 10
 
 
 class ShowSummary(BaseModel):

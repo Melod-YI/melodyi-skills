@@ -85,3 +85,42 @@ class TestModels:
     def test_episode_group_brief(self):
         g = EpisodeGroupBrief(id="abc", name="HD Remaster", type=1)
         assert g.id == "abc"
+
+
+class TestEpisodeGroupModels:
+    """剧集组相关模型测试"""
+
+    def test_brief_type_name_mapped(self):
+        """type=6 应映射为「制作顺序」"""
+        g = EpisodeGroupBrief(id="abc", name="All Episodes + OVAs", type=6, episode_count=19)
+        assert g.type_name == "制作顺序"
+        assert g.episode_count == 19
+
+    def test_brief_type_name_known_values(self):
+        assert EpisodeGroupBrief(id="x", name="x", type=1).type_name == "首播顺序"
+        assert EpisodeGroupBrief(id="x", name="x", type=3).type_name == "DVD"
+        assert EpisodeGroupBrief(id="x", name="x", type=7).type_name == "TV"
+
+    def test_brief_type_name_unknown_falls_back_to_number(self):
+        g = EpisodeGroupBrief(id="x", name="x", type=99)
+        assert g.type_name == "99"
+
+    def test_episode_brief_season_number_optional(self):
+        """剧集组内集带季号；普通季集为 None"""
+        e = EpisodeBrief(episode_number=1, name="x", season_number=2)
+        assert e.season_number == 2
+        e2 = EpisodeBrief(episode_number=1, name="x")
+        assert e2.season_number is None
+
+    def test_episode_group_detail(self):
+        from melodyi_filebot.models import EpisodeGroupDetail, EpisodeGroupSub
+        d = EpisodeGroupDetail(
+            id="g1", name="All", type=6, episode_count=19, group_count=2,
+            sub_groups=[EpisodeGroupSub(name="正片", episodes=[
+                EpisodeBrief(episode_number=1, name="e1", season_number=1, overview_length=50)
+            ])],
+        )
+        assert d.type_name == "制作顺序"
+        assert d.group_count == 2
+        assert d.sub_groups[0].name == "正片"
+        assert d.sub_groups[0].episodes[0].season_number == 1
