@@ -115,12 +115,23 @@ class TavilyExtractProvider(BaseFetchProvider):
                 results = response_data.get("results", [])
 
                 if not results:
+                    # results 为空时，优先从 failed_results 取出 Tavily 侧的真实失败原因，
+                    # 透出到 error 以便 Agent/用户定位问题（而非笼统的"无提取结果"）。
+                    failed_results = response_data.get("failed_results") or []
+                    failed_reason = None
+                    for item in failed_results:
+                        if item.get("url") == request.url and item.get("error"):
+                            failed_reason = item["error"]
+                            break
+                    if failed_reason is None and failed_results:
+                        failed_reason = failed_results[0].get("error")
+                    error_msg = f"提取失败: {failed_reason}" if failed_reason else "无提取结果"
                     return ProviderFetchResult(
                         provider=self.name,
                         url=request.url,
                         content="",
                         response_time_ms=elapsed_ms,
-                        error="无提取结果",
+                        error=error_msg,
                     )
 
                 # 获取第一个结果

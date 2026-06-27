@@ -1,16 +1,24 @@
 """全局配置模型"""
 
+from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel, Field, model_validator
 from melodyi_web.domain.models.provider_config import ProviderConfig
 from melodyi_web.domain.models.fetch_provider_config import FetchProviderConfig
 
 
+# 数据库默认路径：与其他 melodyi skill 一致，落在 ~/.melodyi-skills/melodyi-web/data/
+# 用绝对路径而非相对路径，避免 config.yaml 缺少 database 段时把 db 创建到 CWD。
+DEFAULT_DATABASE_PATH = str(
+    Path.home() / ".melodyi-skills" / "melodyi-web" / "data" / "compare.db"
+)
+
+
 class DatabaseConfig(BaseModel):
     """数据库配置"""
 
     database_path: str = Field(
-        default="./data/compare.db",
+        default=DEFAULT_DATABASE_PATH,
         description="SQLite 数据库文件路径"
     )
 

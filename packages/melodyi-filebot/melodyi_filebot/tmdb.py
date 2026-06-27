@@ -34,7 +34,7 @@ def _ensure_key() -> str:
         _api_key = config.load_tmdb_api_key()
     if not _api_key:
         raise RuntimeError(
-            "未配置 TMDB_API_KEY。请设置环境变量或在 ~/.melodyi-filebot/config.yaml 中配置 tmdb_api_key。"
+            "未配置 TMDB_API_KEY。请设置环境变量或在 ~/.melodyi-skills/melodyi-filebot/config.yaml 中配置 tmdb_api_key。"
         )
     tmdbsimple.API_KEY = _api_key
     return _api_key

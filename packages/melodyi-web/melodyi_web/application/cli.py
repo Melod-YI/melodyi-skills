@@ -144,7 +144,7 @@ def search(
         if not provider_configs:
             click.echo("错误: 未配置任何搜索供应商", err=True)
             click.echo("请运行 'melodyi-web config init' 创建配置文件", err=True)
-            click.echo("然后编辑 ~/.melodyi-web/config.yaml 添加 search_providers", err=True)
+            click.echo("然后编辑 ~/.melodyi-skills/melodyi-web/config.yaml 添加 search_providers", err=True)
             sys.exit(1)
 
         # 4. 创建提供商实例
@@ -318,7 +318,7 @@ def config():
 def config_init(force: bool):
     """创建默认配置文件
 
-    在 ~/.melodyi-web/ 目录下创建默认配置文件。
+    在 ~/.melodyi-skills/melodyi-web/ 目录下创建默认配置文件。
 
     示例:
         melodyi-web config init
@@ -326,7 +326,9 @@ def config_init(force: bool):
     """
     from pathlib import Path
 
-    config_dir = Path.home() / ".melodyi-web"
+    from melodyi_web.infrastructure.config.config_loader import USER_CONFIG_DIR
+
+    config_dir = USER_CONFIG_DIR
     config_file = config_dir / "config.yaml"
 
     if config_file.exists() and not force:
@@ -425,7 +427,7 @@ mode:
   # 比对模式：第一个供应商立即返回，其余后台执行并记录
   # 用于分析供应商质量差异
   comparison: false
-  log_dir: ${HOME}/.melodyi-web/logs
+  log_dir: ${HOME}/.melodyi-skills/melodyi-web/logs
 
 # ====================
 # 回退配置
@@ -439,12 +441,12 @@ fallback:
 # ====================
 # 比对模式下存储结果数据
 database:
-  database_path: ${HOME}/.melodyi-web/data/compare.db
+  database_path: ${HOME}/.melodyi-skills/melodyi-web/data/compare.db
 
 # ====================
 # 环境变量说明
 # ====================
-# 创建 ~/.melodyi-web/.env 文件存放 API Key：
+# 创建 ~/.melodyi-skills/melodyi-web/.env 文件存放 API Key：
 #
 # TAVILY_API_KEY=tvly-xxxxx
 # BRAVE_API_KEY=xxxxx

@@ -41,17 +41,17 @@ melodyi-web fetch https://example.com
 melodyi-web config init
 ```
 
-这会在 `~/.melodyi-web/` 下创建：
+这会在 `~/.melodyi-skills/melodyi-web/` 下创建：
 
 ```
-~/.melodyi-web/
+~/.melodyi-skills/melodyi-web/
 ├── config.yaml   # 主配置文件
 └── .env          # API Key（需手动创建）
 ```
 
 ### 第二步：配置 API Key
 
-创建 `~/.melodyi-web/.env` 文件，填入你的 API Key：
+创建 `~/.melodyi-skills/melodyi-web/.env` 文件，填入你的 API Key：
 
 ```env
 # 根据需要填写，不需要全部填写
@@ -66,7 +66,7 @@ FIRECRAWL_API_KEY=xxxxx
 
 ### 第三步：编辑配置文件
 
-编辑 `~/.melodyi-web/config.yaml`，取消注释需要使用的搜索提供商：
+编辑 `~/.melodyi-skills/melodyi-web/config.yaml`，取消注释需要使用的搜索提供商：
 
 ```yaml
 search_providers:
@@ -160,7 +160,7 @@ melodyi-web search "测试查询" -c
 melodyi-web fetch https://example.com -c
 ```
 
-数据库默认存储在 `~/.melodyi-web/data/compare.db`。
+数据库默认存储在 `~/.melodyi-skills/melodyi-web/data/compare.db`。
 
 ## 搜索提供商
 
@@ -187,14 +187,14 @@ melodyi-web fetch https://example.com -c
 配置按以下优先级查找，找到即停：
 
 1. CLI `--config` 参数指定的路径
-2. `~/.melodyi-web/config.yaml`
+2. `~/.melodyi-skills/melodyi-web/config.yaml`
 3. 内置默认值（fetch 默认可用，search 需配置）
 
 ## 常见错误
 
 | 错误信息 | 原因 | 解决方法 |
 |----------|------|----------|
-| `未配置任何搜索供应商` | 配置文件中没有启用搜索提供商 | 编辑 `~/.melodyi-web/config.yaml`，取消注释提供商 |
+| `未配置任何搜索供应商` | 配置文件中没有启用搜索提供商 | 编辑 `~/.melodyi-skills/melodyi-web/config.yaml`，取消注释提供商 |
 | `API key is invalid or missing` | API Key 未设置或无效 | 检查 `.env` 文件或配置中的 `api_key` |
 | `Request was rate-limited` | 请求频率超限 | 稍后重试，或换用其他提供商 |
 | `All providers failed` | 所有提供商都失败 | 检查网络和 API Key 配置 |

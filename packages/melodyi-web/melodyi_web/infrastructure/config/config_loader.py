@@ -2,7 +2,7 @@
 
 配置查找优先级：
 1. CLI --config 参数指定的路径
-2. 用户目录 ~/.melodyi-web/config.yaml
+2. 用户目录 ~/.melodyi-skills/melodyi-web/config.yaml（与其他 melodyi skill 共用 ~/.melodyi-skills/ 根目录）
 3. 内置默认配置（不依赖外部文件）
 """
 
@@ -23,8 +23,8 @@ from melodyi_web.domain.models.provider_config import ProviderConfig
 from melodyi_web.domain.models.fetch_provider_config import FetchProviderConfig
 
 
-# 用户配置目录
-USER_CONFIG_DIR = Path.home() / ".melodyi-web"
+# 用户配置目录（与其他 melodyi skill 共用 ~/.melodyi-skills/ 根目录）
+USER_CONFIG_DIR = Path.home() / ".melodyi-skills" / "melodyi-web"
 USER_CONFIG_FILE = USER_CONFIG_DIR / "config.yaml"
 
 
@@ -78,7 +78,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
 
     查找优先级：
     1. config_path（CLI --config 参数）
-    2. ~/.melodyi-web/config.yaml（用户配置）
+    2. ~/.melodyi-skills/melodyi-web/config.yaml（用户配置）
     3. 内置默认配置
 
     Args:

@@ -1,4 +1,10 @@
-"""Configuration system with priority chain: CLI > env vars > config file > defaults."""
+"""配置系统，优先级：CLI 参数 > 环境变量 > 配置文件 > 默认值。
+
+配置文件查找不依赖执行位置（cwd），而是相对脚本自身位置与用户主目录：
+1. CLI `--config <path>` 指定的路径
+2. 用户目录 `~/.melodyi-skills/melodyi-vision/config.json`（用户私有配置，优先；与其他 melodyi skill 共用 ~/.melodyi-skills/ 根目录）
+3. 脚本同目录的 `config.json`（项目自带示例，作为 fallback；相对 `__file__` 定位）
+"""
 
 import json
 import os
@@ -6,6 +12,11 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+# 脚本所在目录：项目自带示例配置相对此定位，与执行位置无关
+SCRIPT_DIR = Path(__file__).resolve().parent
+# 用户主目录下的统一配置目录（与其他 melodyi skill 约定一致，共用 ~/.melodyi-skills/ 根目录）
+USER_CONFIG_DIR = Path.home() / ".melodyi-skills" / "melodyi-vision"
 
 
 @dataclass
@@ -17,21 +28,29 @@ class VisionConfig:
     provider: str = "openai"
 
 
-def _find_config_file(cli_path: Optional[str] = None) -> Optional[Path]:
-    """Find config file: CLI path > ./.image-understanding.json > ~/.config/image-understanding/config.json."""
+def _config_search_paths(cli_path: Optional[str] = None) -> list:
+    """返回配置文件候选路径（按优先级），均不依赖 cwd。
+
+    Args:
+        cli_path: CLI `--config` 指定的路径，给定后只查它
+
+    Returns:
+        候选 Path 列表
+    """
     if cli_path:
-        path = Path(cli_path)
+        return [Path(cli_path)]
+    # 不依赖 cwd：用户私有配置优先于项目自带示例
+    return [
+        USER_CONFIG_DIR / "config.json",
+        SCRIPT_DIR / "config.json",
+    ]
+
+
+def _find_config_file(cli_path: Optional[str] = None) -> Optional[Path]:
+    """按优先级查找首个存在的配置文件，找不到返回 None。"""
+    for path in _config_search_paths(cli_path):
         if path.exists():
             return path
-
-    local_path = Path.cwd() / ".image-understanding.json"
-    if local_path.exists():
-        return local_path
-
-    home_path = Path.home() / ".config" / "image-understanding" / "config.json"
-    if home_path.exists():
-        return home_path
-
     return None
 
 

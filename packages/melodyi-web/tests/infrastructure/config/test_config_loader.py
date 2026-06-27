@@ -3,7 +3,19 @@
 import pytest
 import tempfile
 import os
-from melodyi_web.infrastructure.config.config_loader import load_config, resolve_env_var
+from pathlib import Path
+from melodyi_web.infrastructure.config.config_loader import load_config, resolve_env_var, USER_CONFIG_DIR, USER_CONFIG_FILE
+
+
+class TestConfigDirs:
+    """配置目录常量测试"""
+
+    def test_user_config_dir_matches_convention(self):
+        """用户配置目录应为 ~/.melodyi-skills/melodyi-web（与其他 melodyi skill 一致）。"""
+        assert USER_CONFIG_DIR == Path.home() / ".melodyi-skills" / "melodyi-web"
+
+    def test_user_config_file_under_config_dir(self):
+        assert USER_CONFIG_FILE == USER_CONFIG_DIR / "config.yaml"
 
 
 class TestResolveEnvVar:
@@ -91,8 +103,13 @@ search_providers:
 
         assert config.search_providers[0].api_key == "env-value"
 
-    def test_load_default_config(self):
+    def test_load_default_config(self, monkeypatch, tmp_path):
         """测试加载内置默认配置（无配置文件时）"""
+        # 隔离真实用户配置：将查找路径指向不存在的文件，强制走内置默认
+        monkeypatch.setattr(
+            "melodyi_web.infrastructure.config.config_loader.USER_CONFIG_FILE",
+            tmp_path / "nonexistent.yaml",
+        )
         config = load_config()
         assert config is not None
         # Search providers 需用户配置，默认为空
@@ -101,3 +118,33 @@ search_providers:
         assert len(config.fetch_providers) == 2
         assert config.fetch_providers[0].name == "jina"
         assert config.fetch_providers[1].name == "markdown-new"
+
+
+class TestDatabaseConfigDefault:
+    """DatabaseConfig 默认路径测试"""
+
+    def test_default_database_path_in_user_dir(self):
+        """DatabaseConfig 默认路径应落在用户目录下，而非相对的 ./data/compare.db。
+
+        回归保护：之前 schema 默认是相对路径 ./data/compare.db，当 config.yaml
+        缺少 database 段时会把 db 创建到 CWD（仓库内）。修复后应为绝对路径。
+        """
+        from melodyi_web.infrastructure.config.config_schema import DatabaseConfig
+
+        expected = str(Path.home() / ".melodyi-skills" / "melodyi-web" / "data" / "compare.db")
+        assert DatabaseConfig().database_path == expected
+        # 必须是绝对路径，不能是相对路径
+        assert Path(DatabaseConfig().database_path).is_absolute()
+
+    def test_yaml_without_database_section_uses_user_dir(self, tmp_path):
+        """config.yaml 缺少 database 段时，应回退到用户目录下的绝对路径。"""
+        yaml_content = """
+search_providers: []
+mode:
+  comparison: false
+"""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(yaml_content, encoding="utf-8")
+        config = load_config(str(cfg_file))
+        expected = str(Path.home() / ".melodyi-skills" / "melodyi-web" / "data" / "compare.db")
+        assert config.database.database_path == expected

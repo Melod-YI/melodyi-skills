@@ -101,7 +101,7 @@ melodyi-web search "Vue3 composition API best practice" -t month -i juejin.cn -i
 
 如果搜索失败，命令会输出错误信息和恢复提示。常见情况：
 
-- **"API key is invalid or missing"** — 检查 `~/.melodyi-web/config.yaml` 中对应提供商的 API Key 配置，或者换用其他提供商
+- **"API key is invalid or missing"** — 检查 `~/.melodyi-skills/melodyi-web/config.yaml` 中对应提供商的 API Key 配置，或者换用其他提供商
 - **"Request was rate-limited"** — 稍后重试，或系统会自动切换到其他提供商
 - **"All providers failed"** — 所有提供商都失败了，检查网络和配置
 
@@ -109,7 +109,7 @@ melodyi-web search "Vue3 composition API best practice" -t month -i juejin.cn -i
 
 ## 配置
 
-搜索提供商需要在 `~/.melodyi-web/config.yaml` 中配置 API Key。如果没有配置文件，可以用以下命令生成：
+搜索提供商需要在 `~/.melodyi-skills/melodyi-web/config.yaml` 中配置 API Key。如果没有配置文件，可以用以下命令生成：
 
 ```bash
 melodyi-web config init

@@ -250,13 +250,13 @@ def draft_map(show_id, movie_id, source, language, season, out):
 @cli.command(name="execute-plan")
 @click.option("--plan", "plan_path", required=True, type=click.Path(exists=True))
 @click.option("--execute", is_flag=True, help="真正执行（默认 dry-run）")
-@click.option("--snapshot", type=click.Path(), default=None, help="事务日志保存路径（默认存到 ~/.melodyi-filebot/snapshots/ 下）")
+@click.option("--snapshot", type=click.Path(), default=None, help="事务日志保存路径（默认存到 ~/.melodyi-skills/melodyi-filebot/snapshots/ 下）")
 def execute_plan_cmd(plan_path, execute, snapshot):
     """执行计划（默认 dry-run）
 
     真正执行（--execute）时一定会写事务日志，以便事后 undo：
     - 显式 --snapshot：写到指定路径
-    - 未指定：默认写到 ~/.melodyi-filebot/snapshots/<plan文件名>.snapshot.json
+    - 未指定：默认写到 ~/.melodyi-skills/melodyi-filebot/snapshots/<plan文件名>.snapshot.json
     dry-run 不执行，不写日志。
     """
     plan_data = json.loads(pathlib.Path(plan_path).read_text(encoding="utf-8"))

@@ -26,10 +26,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **查找优先级**：
 1. CLI `--config` 参数指定路径
-2. `~/.melodyi-web/config.yaml`（用户配置）
+2. `~/.melodyi-skills/melodyi-web/config.yaml`（用户配置）
 3. 内置默认值（无需配置文件）
 
-**用户配置目录**: `~/.melodyi-web/`
+**用户配置目录**: `~/.melodyi-skills/melodyi-web/`
 
 | 文件 | 说明 |
 |------|------|

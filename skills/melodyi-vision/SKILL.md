@@ -47,10 +47,12 @@ Priority: CLI arguments > environment variables > config file > defaults.
 | Max Tokens | `VISION_MAX_TOKENS` | `max_tokens` | `1024` |
 | Provider | `VISION_PROVIDER` | `provider` | `openai` |
 
-Config file locations (checked in order):
+Config file locations (checked in order; all resolved independent of the current working directory — you can run the script from any drive/directory):
 1. `--config <path>` (CLI argument)
-2. `./.image-understanding.json` (current directory)
-3. `~/.config/image-understanding/config.json` (home directory)
+2. `~/.melodyi-skills/melodyi-vision/config.json` (user-private config under home directory; preferred for real keys)
+3. `scripts/config.json` next to the script (bundled **example** with a placeholder key; used only as a fallback when no user config exists, located relative to `understand_image.py`, not cwd)
+
+The bundled `scripts/config.json` has a placeholder key `sk-your-api-key-here` — it loads successfully but the API call will fail until replaced. For persistent private use, copy it to `~/.melodyi-skills/melodyi-vision/config.json` and edit there (the user-dir file takes precedence over the bundled example, so secrets stay out of the repo).
 
 Config file format:
 ```json

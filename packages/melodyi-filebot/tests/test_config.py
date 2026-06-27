@@ -48,7 +48,7 @@ class TestConfigDirs:
     def test_config_dir_is_user_home(self):
         from pathlib import Path
         from melodyi_filebot import config
-        assert config.CONFIG_DIR == Path.home() / ".melodyi-filebot"
+        assert config.CONFIG_DIR == Path.home() / ".melodyi-skills" / "melodyi-filebot"
 
     def test_config_path_under_config_dir(self):
         from melodyi_filebot import config

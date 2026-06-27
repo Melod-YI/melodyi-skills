@@ -100,7 +100,7 @@ melodyi-web fetch https://dynamic-site.com -p jina-reader
 
 ## 配置
 
-默认的 `jina-reader` 和 `markdown-new` 提供商无需任何配置即可使用。如果需要配置其他提供商（如 `tavily-extract`），编辑 `~/.melodyi-web/config.yaml`：
+默认的 `jina-reader` 和 `markdown-new` 提供商无需任何配置即可使用。如果需要配置其他提供商（如 `tavily-extract`），编辑 `~/.melodyi-skills/melodyi-web/config.yaml`：
 
 ```bash
 # 生成默认配置文件

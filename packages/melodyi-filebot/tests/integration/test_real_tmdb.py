@@ -1,7 +1,7 @@
 """真实 TMDB API 集成测试
 
 默认 skip，需 `pytest --run-integration` 启用，且需配置 TMDB_API_KEY
-（环境变量或 ~/.melodyi-filebot/config.yaml）。
+（环境变量或 ~/.melodyi-skills/melodyi-filebot/config.yaml）。
 
 兼容性设计：
 - 调用密度高，每次 API 调用前后加间隔，防止限流。
