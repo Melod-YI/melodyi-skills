@@ -147,7 +147,7 @@ melodyi-filebot execute-plan --plan plan.json --execute --snapshot /path/to/snap
 - dry-run：校验源文件存在、目标无冲突，不执行不写日志
 - 伴生文件（字幕等）的 move 同样在 dry-run 校验范围内，并随 `--execute` 一起移动、写入事务日志
 - `--execute`：真正执行，**一定会写事务日志**：
-  - 未指定 `--snapshot` → 默认写到 `~/.melodyi-filebot/snapshots/<plan文件名>.snapshot.json`
+  - 未指定 `--snapshot` → 默认写到 `~/.melodyi-skills/melodyi-filebot/snapshots/<plan文件名>.snapshot.json`
   - 指定 `--snapshot` → 写到指定路径
   - 执行后回显日志路径与 undo 用法
 

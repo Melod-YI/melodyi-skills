@@ -1,0 +1,162 @@
+{
+  "returnCode": "0",
+  "addressDescription": "示例省示例市示例区示例街道测试园区A区",
+  "aois": [
+    {
+      "area": 360000.0,
+      "distance": 0.0,
+      "poiType": "BUSINESS_PARK",
+      "name": "测试园区A区",
+      "siteId": "000000000000000001",
+      "location": {
+        "latitude": 30.000000,
+        "longitude": 120.000000
+      },
+      "matchedLanguage": "zh",
+      "direction": "Center"
+    },
+    {
+      "area": 480000.0,
+      "distance": 0.0,
+      "poiType": "RESEARCH_INSTITUTE",
+      "name": "测试园区",
+      "siteId": "000000000000000002",
+      "location": {
+        "latitude": 30.000100,
+        "longitude": 120.000100
+      },
+      "matchedLanguage": "zh",
+      "direction": "Center"
+    }
+  ],
+  "roads": [
+    {
+      "distance": 157.48,
+      "name": "示例路",
+      "siteId": "000000000000000003",
+      "location": {
+        "latitude": 30.000200,
+        "longitude": 120.000200
+      },
+      "matchedLanguage": "zh",
+      "direction": "east"
+    },
+    {
+      "distance": 243.57,
+      "name": "测试路",
+      "siteId": "000000000000000004",
+      "location": {
+        "latitude": 30.000300,
+        "longitude": 120.000300
+      },
+      "matchedLanguage": "zh",
+      "direction": "southeast"
+    }
+  ],
+  "pois": [
+    {
+      "address": "示例省示例市示例区示例大道1号",
+      "distance": 0.0,
+      "poiType": "BUSINESS_PARK",
+      "name": "测试园区A区",
+      "siteId": "000000000000000001",
+      "location": {
+        "latitude": 30.000000,
+        "longitude": 120.000000
+      },
+      "matchedLanguage": "zh",
+      "direction": "Center"
+    },
+    {
+      "address": "示例省示例市示例区示例大道1号",
+      "distance": 12.3,
+      "poiType": "COMMERCIAL_BUILDING",
+      "name": "测试园区N2",
+      "siteId": "000000000000000005",
+      "location": {
+        "latitude": 30.000010,
+        "longitude": 120.000010
+      },
+      "matchedLanguage": "zh",
+      "direction": "south"
+    },
+    {
+      "address": "示例省示例市示例区示例大道1号",
+      "distance": 88.8,
+      "poiType": "COMMERCIAL_BUILDING",
+      "name": "测试园区N3",
+      "siteId": "000000000000000006",
+      "location": {
+        "latitude": 30.000020,
+        "longitude": 120.000020
+      },
+      "matchedLanguage": "zh",
+      "direction": "north"
+    },
+    {
+      "address": "示例省示例市示例区示例大道2号",
+      "distance": 250.5,
+      "poiType": "SHOPPING_CENTER",
+      "name": "示例购物中心",
+      "siteId": "000000000000000007",
+      "location": {
+        "latitude": 30.000030,
+        "longitude": 120.000030
+      },
+      "matchedLanguage": "zh",
+      "direction": "east"
+    },
+    {
+      "address": "示例省示例市示例区示例大道3号",
+      "distance": 500.0,
+      "poiType": "SUBWAY",
+      "name": "示例(地铁站)",
+      "siteId": "000000000000000008",
+      "location": {
+        "latitude": 30.000040,
+        "longitude": 120.000040
+      },
+      "matchedLanguage": "zh",
+      "direction": "west"
+    }
+  ],
+  "intersections": [
+    {
+      "distance": 242.29,
+      "name": "示例路与测试路交叉口",
+      "siteId": "000000000000000009",
+      "location": {
+        "latitude": 30.000050,
+        "longitude": 120.000050
+      },
+      "matchedLanguage": "zh",
+      "direction": "southeast"
+    }
+  ],
+  "returnDesc": "OK",
+  "addressComponent": {
+    "adminLevel3": "示例区",
+    "adminLevel4": "示例街道",
+    "city": {
+      "cityName": "示例市",
+      "cityCode": "010",
+      "cityId": "000000000000000010"
+    },
+    "streetNumber": {
+      "streetName": "示例大道",
+      "formatAddress": "示例市示例区示例大道111号",
+      "distance": 190.62,
+      "streetNumber": "111号",
+      "location": {
+        "latitude": 30.000060,
+        "longitude": 120.000060
+      },
+      "direction": "southeast"
+    },
+    "adminLevel1": "示例省",
+    "adminLevel2": "示例市",
+    "countryCode": "CN",
+    "adminCode": "000000",
+    "countryName": "中国"
+  }
+}

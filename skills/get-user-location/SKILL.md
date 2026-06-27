@@ -17,7 +17,18 @@ python <skill-path>/script/run.py --output .
 
 `<skill-path>` 是本技能的安装路径（即 SKILL.md 所在目录）。整个流程约需 60 秒，通过 Bash 工具执行时请将 timeout 设置为 **180000**（3 分钟）。
 
-需要两个环境变量：`HUAWEI_USERNAME`（华为账号）和 `HUAWEI_PASSWORD`（密码）。脚本启动时会校验，缺失时会打印错误并退出。
+需要两个凭据：`HUAWEI_USERNAME`（华为账号）和 `HUAWEI_PASSWORD`（密码）。可通过**环境变量**或**配置文件**提供，环境变量优先。
+
+配置文件路径：`~/.melodyi-skills/get-user-location/config.json`，格式：
+
+```json
+{
+  "huawei_username": "手机号/邮箱/账号名",
+  "huawei_password": "密码"
+}
+```
+
+也可用 `--config <路径>` 指定任意配置文件。脚本启动时会校验，缺失时会打印错误并退出。
 
 ## 读取输出
 

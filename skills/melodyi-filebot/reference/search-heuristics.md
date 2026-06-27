@@ -1,4 +1,4 @@
-# 搜索启发式与已知案例
+# 搜索启发式
 
 本文件供 agent 在解析文件名、选择搜索关键字、判断 TMDB 数据是否符合用户理解时参考。随用例累积。
 
@@ -36,7 +36,7 @@
 - 处理：回退搜 `莉可丽丝` → 命中主剧 → 文件 `[01-06]` 映射到 `Season 00/S00E01-E06`
 - 规则沉淀：`xxx：副标题` 形式、资源方单列的剧场版/OVA/特别篇，常对应 TMDB 的 S00
 
-## 非标场景（P3 验证，此处先记录特征）
+<!-- ## 非标场景（P3 验证，此处先记录特征）
 
 ### 1. 剧集组（如高达SEED重置版）
 
@@ -59,4 +59,51 @@
 ### 4. 集合并/拆分
 
 - 特征：一个文件对应多集，或一集拆多文件
-- 处理方向：`S01E01-E02`、`S01E01-part1` 命名
+- 处理方向：`S01E01-E02`、`S01E01-part1` 命名 -->
+
+
+## 自动处理 vs override 边界（季/集归属判断）
+
+季/集归属判断（"这批文件属于哪一季、每集对应哪一集"）有较大随机性，不靠规则硬编码。原则：
+
+### 可交给 CLI 自动处理（build-plan 自动模式）
+
+满足以下条件之一，可按文件名解析：
+
+- 文件名含可解析的季/集标记：`S01E01`、`S01E01-E02`（范围）、`S01E01-part-1`（分段）、`[01]`（方括号集号）、`E01`
+- 且季号要么在文件名中，要么能用 `--season N` 明确给定（如源目录是某一季但文件名无 S 标记）
+
+### 需要 override（draft-map → 编辑 → build-plan --map）
+
+出现以下任一情况，自动解析不可靠或会错，应走 override：
+
+- **季归属不确定**：文件名无季标记，且无法确定是第几季（如 `[01]..[12]` 不知是 S1 还是 S2）
+- **集号歧义**：`[01-06]` 可能是 S00 特别篇也可能是 S01 正篇
+- **集号需重排**：文件编号与 TMDB 集号不一致（如重置版调整了集序）
+- **一文件对应多集**：需指定 `episode_end`（如 `S01E01-E02`）
+- **一集拆多文件**：需指定 `part`（如 `S01E01-part-1`）
+- **特别篇归季不明**：S00 的某些集实际属于某季中间
+
+### override 工作流
+
+1. `melodyi-filebot draft-map --show-id <id> --source <目录> [--season N] --out map.json`
+   生成映射初版（含无法解析项，season/episode 为 null）。不调 TMDB，轻量。
+2. agent 用 `fetch-summary <id>` 对照季/集结构，编辑 `map.json`：修正每项的 season/episode/episode_end/part。
+3. `melodyi-filebot build-plan --map map.json --dest <目标> --out plan.json`
+   按显式映射构建计划（`spec_applied="override"`，不解析文件名）。
+4. `execute-plan` dry-run 校验 → `--execute` 执行。
+
+### 映射格式
+
+```json
+{
+  "media_type": "tv",
+  "tmdb_id": 46260,
+  "language": "zh-CN",
+  "mappings": [
+    {"file": "/abs/path/file.mkv", "season": 2, "episode": 1, "episode_end": null, "part": null}
+  ]
+}
+```
+
+电影映射 `media_type="movie"`，每项只需 `file`（第一项为正片）。

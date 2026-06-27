@@ -16,8 +16,14 @@ from playwright.async_api import async_playwright
 
 from .auth import fill_login_form, navigate_to_home, verify_login, wait_for_iframe
 from .browser import launch_browser
-from .config import build_config, validate_env
-from .extractor import extract_data, save_result, validate_response
+from .config import build_config, parse_args, validate_credentials
+from .extractor import (
+    extract_data,
+    extract_request_location,
+    save_result,
+    simplify_response,
+    validate_response,
+)
 from .interceptor import Interceptor, click_find_device, wait_for_data
 
 logger = logging.getLogger(__name__)
@@ -46,16 +52,21 @@ async def run(argv: Optional[List[str]] = None) -> None:
       6. 提取并验证数据
       7. 保存结果
     """
-    # 1. 解析参数 & 校验环境变量（先于日志配置，需要 verbose 参数）
-    missing = validate_env()
+    # 1. 解析参数 & 校验凭据（先于日志配置，需要 verbose 参数）
+    args = parse_args(argv)
+    missing = validate_credentials(args.config)
     if missing:
-        print("✗ 未设置以下环境变量：", file=sys.stderr)
+        print("✗ 未配置以下凭据：", file=sys.stderr)
         for m in missing:
             print(m, file=sys.stderr)
-        print("请在系统环境变量中配置后重新运行", file=sys.stderr)
+        print(
+            "请通过环境变量 HUAWEI_USERNAME / HUAWEI_PASSWORD，"
+            "或配置文件 ~/.melodyi-skills/get-user-location/config.json 配置后重新运行",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    config = build_config(argv)
+    config = build_config(args=args)
     setup_logging(config.verbose)
 
     logger.info("=== 华为云空间 - 查找设备定位数据提取 ===")
@@ -74,7 +85,7 @@ async def run(argv: Optional[List[str]] = None) -> None:
     async with async_playwright() as pw:
         browser = await launch_browser(pw, headed=config.headed)
         try:
-            context = await browser.new_context()
+            context = await browser.new_context(locale="zh-CN")
             page = await context.new_page()
 
             # 3. 导航 & 登录
@@ -95,13 +106,17 @@ async def run(argv: Optional[List[str]] = None) -> None:
             raw_data = extract_data(interceptor.captured)
             result = validate_response(raw_data)
 
-            # 7. 保存结果
-            save_result(raw_data, config.output_file)
+            # 7. 精简并保存结果
+            simplified = simplify_response(raw_data)
+            # 注入请求 payload 中的查询经纬度（最真实准确的定位点）
+            location = extract_request_location(interceptor.captured)
+            if location is not None:
+                simplified["location"] = location
+            save_result(simplified, config.output_file)
 
             # 输出最终结果
             print(f"用户当前地址: {result['address']}")
-            print(f"完整数据已保存到 {config.output_file}")
-            logger.info("浏览器已关闭")
+            print(f"精简数据已保存到 {config.output_file}")
 
             await context.close()
         finally:

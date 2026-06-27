@@ -7,11 +7,21 @@
   - 保存结果到 JSON 文件
 """
 
+import copy
 import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# 顶层需移除的无用字段
+_UNUSED_TOP_KEYS = ("aois", "roads", "intersections", "returnDesc")
+
+# addressComponent 中需移除的无用字段
+_UNUSED_ADDRESS_COMPONENT_KEYS = ("streetNumber", "adminCode")
+
+# pois 精简后保留的最大数量（按 distance 升序）
+_MAX_POIS = 2
 
 
 def extract_data(captured: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,6 +77,91 @@ def validate_response(data: Dict[str, Any]) -> Dict[str, str]:
         "return_code": return_code,
         "address": address,
     }
+
+
+def extract_request_location(captured: Dict[str, Any]) -> Optional[Dict[str, float]]:
+    """
+    从捕获的 reverseGeocode 请求 payload 中提取查询经纬度
+
+    payload 形如:
+      {"location": {"latitude": ..., "longitude": ...}, "language": "zh-CN", ...}
+
+    该经纬度为本次查询的输入点，是输出中最真实准确的定位坐标。
+
+    Args:
+        captured: Interceptor.captured 原始数据（含 request_body）
+
+    Returns:
+        {"latitude": float, "longitude": float}；payload 缺失或无 location 时返回 None
+    """
+    payload_raw = captured.get("request_body")
+    if not payload_raw:
+        logger.warning("未捕获到请求 payload，无法提取经纬度")
+        return None
+
+    try:
+        payload = json.loads(payload_raw)
+    except json.JSONDecodeError as e:
+        logger.warning("请求 payload JSON 解析失败: %s", e)
+        return None
+
+    location = payload.get("location")
+    if not isinstance(location, dict):
+        logger.warning("payload 中缺少 location 字段")
+        return None
+
+    latitude = location.get("latitude")
+    longitude = location.get("longitude")
+    if latitude is None or longitude is None:
+        logger.warning("payload location 中缺少经纬度")
+        return None
+
+    logger.info("从请求 payload 提取经纬度: %s, %s", latitude, longitude)
+    return {"latitude": latitude, "longitude": longitude}
+
+
+def simplify_response(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    精简 reverseGeocode 响应，移除无用字段并裁剪 pois
+
+    精简规则:
+      - 移除顶层 aois、roads、intersections、returnDesc
+      - pois 按 distance 升序排序，仅保留至多 2 个（distance 最小者）
+      - addressComponent 中移除 streetNumber、adminCode 及嵌套 city.cityId
+
+    Args:
+        data: 解析后的原始 JSON 响应
+
+    Returns:
+        精简后的数据字典（深拷贝，不修改入参）
+    """
+    simplified = copy.deepcopy(data)
+    logger.info("精简响应数据...")
+
+    # 1. 移除顶层无用字段
+    for key in _UNUSED_TOP_KEYS:
+        simplified.pop(key, None)
+
+    # 2. 裁剪 pois：按 distance 升序取至多 _MAX_POIS 个
+    pois = simplified.get("pois")
+    if isinstance(pois, list):
+        sorted_pois = sorted(
+            pois,
+            key=lambda p: p.get("distance", float("inf")),
+        )
+        simplified["pois"] = sorted_pois[:_MAX_POIS]
+        logger.info("pois 裁剪: %d -> %d", len(pois), len(simplified["pois"]))
+
+    # 3. 移除 addressComponent 中的无用字段（含嵌套 city.cityId）
+    ac = simplified.get("addressComponent")
+    if isinstance(ac, dict):
+        for key in _UNUSED_ADDRESS_COMPONENT_KEYS:
+            ac.pop(key, None)
+        city = ac.get("city")
+        if isinstance(city, dict):
+            city.pop("cityId", None)
+
+    return simplified
 
 
 def save_result(data: Dict[str, Any], output_file: str) -> None:

@@ -12,6 +12,10 @@
   HUAWEI_USERNAME  — 手机号/邮箱/账号名
   HUAWEI_PASSWORD  — 密码
 
+也可用配置文件 ~/.melodyi-skills/get-user-location/config.json 提供凭据
+（字段 huawei_username / huawei_password），或用 --config 指定路径；
+环境变量优先于配置文件。
+
 输出:
   <输出目录>/reverse-geocode-response.json
 """
