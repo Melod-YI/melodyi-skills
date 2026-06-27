@@ -1,5 +1,6 @@
 """Config 配置模型测试"""
 
+from pathlib import Path
 import pytest
 from melodyi_web.infrastructure.config.config_schema import Config, ModeConfig, FallbackConfig
 
@@ -40,7 +41,10 @@ class TestConfig:
         """测试 ModeConfig 默认值"""
         mode = ModeConfig()
         assert mode.comparison is False
-        assert mode.log_dir == "./logs"
+        # 默认日志目录落在用户目录下（绝对路径），避免落到 CWD
+        assert mode.log_dir == str(
+            Path.home() / ".melodyi-skills" / "melodyi-web" / "logs"
+        )
 
     def test_fallback_config_defaults(self):
         """测试 FallbackConfig 默认值"""

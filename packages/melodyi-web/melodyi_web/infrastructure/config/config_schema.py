@@ -23,11 +23,16 @@ class DatabaseConfig(BaseModel):
     )
 
 
+# 日志默认目录：与其他 melodyi skill 一致，落在 ~/.melodyi-skills/melodyi-web/logs/
+# 用绝对路径而非相对路径，避免 config.yaml 缺少 mode.log_dir 段时把日志写到 CWD。
+DEFAULT_LOG_DIR = str(Path.home() / ".melodyi-skills" / "melodyi-web" / "logs")
+
+
 class ModeConfig(BaseModel):
     """运行模式配置"""
 
     comparison: bool = Field(default=False, description="是否开启比对模式")
-    log_dir: str = Field(default="./logs", description="日志目录")
+    log_dir: str = Field(default=DEFAULT_LOG_DIR, description="日志目录")
 
 
 class FallbackConfig(BaseModel):
