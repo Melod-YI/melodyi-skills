@@ -121,3 +121,22 @@ class GitCodeClient:
             f"/repos/{owner}/{repo}/pulls/{number}/comments",
             json_body=payload,
         )
+
+    def resolve_comment(
+        self,
+        owner: str,
+        repo: str,
+        number: str,
+        discussion_id: str,
+        *,
+        resolved: bool = True,
+    ) -> dict:
+        """更新评论解决状态：PUT /repos/{owner}/{repo}/pulls/{number}/comments/{discussion_id}
+
+        discussion_id 取自 get_comments 返回的评论 id 字段。
+        """
+        return self._request(
+            "PUT",
+            f"/repos/{owner}/{repo}/pulls/{number}/comments/{discussion_id}",
+            json_body={"resolved": resolved},
+        )

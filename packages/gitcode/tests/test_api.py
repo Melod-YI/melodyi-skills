@@ -147,3 +147,35 @@ def test_post_comment_with_commit_id():
     )
     import json as _json
     assert _json.loads(captured["body"])["commit_id"] == "abc"
+
+
+def test_resolve_comment_request():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["method"] = request.method
+        captured["body"] = request.read()
+        return httpx.Response(200, json={"resolved": True})
+
+    client = _client(handler)
+    data = client.resolve_comment("owner", "repo", "123", "disc-1")
+
+    assert data == {"resolved": True}
+    assert captured["method"] == "PUT"
+    assert captured["url"] == f"{API_BASE}/repos/owner/repo/pulls/123/comments/disc-1"
+    import json as _json
+    assert _json.loads(captured["body"]) == {"resolved": True}
+
+
+def test_resolve_comment_false():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.read()
+        return httpx.Response(200, json={})
+
+    client = _client(handler)
+    client.resolve_comment("owner", "repo", "123", "disc-1", resolved=False)
+    import json as _json
+    assert _json.loads(captured["body"]) == {"resolved": False}
