@@ -29,20 +29,30 @@ python script/run.py --output . --headed --verbose
 
 | 参数 | 说明 |
 |---|---|
-| `--output DIR` | 输出目录（默认系统临时目录） |
+| `--output DIR` | 输出目录；不指定则不保存文件，仅标准输出地址与经纬度 |
 | `--headed` | 显示浏览器窗口 |
 | `--verbose` / `-v` | 详细日志输出 |
 | `--config PATH` | 配置文件路径（默认 `~/.melodyi-skills/get-user-location/config.json`） |
 
-无参数时为无头模式 + 输出到临时目录。
+无参数时为无头模式，仅标准输出地址与经纬度，不保存文件。
 
 ## 输出格式
 
 ### stdout
 
+不指定 `--output` 时仅输出地址与经纬度，不保存任何文件：
+
 ```
 用户当前地址: 江苏省南京市雨花台区雨花街道华为南京研究所A区
-精简数据已保存到 C:/workspace/helper/reverse-geocode-response.json
+经纬度: 31.97951, 118.76740
+```
+
+未捕获到请求经纬度时第二行省略。指定 `--output DIR` 时额外保存 JSON 并追加一行提示：
+
+```
+用户当前地址: 江苏省南京市雨花台区雨花街道华为南京研究所A区
+经纬度: 31.97951, 118.76740
+详细数据已保存到 C:/workspace/helper/reverse-geocode-response.json（包含省市区行政区划、附近 POI 等信息）
 ```
 
 ### JSON 文件结构

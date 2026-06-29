@@ -32,27 +32,54 @@ python <skill-path>/script/run.py --output .
 
 ## 读取输出
 
-脚本的标准输出格式如下：
+脚本的标准输出格式如下（两行）：
 
 ```
 用户当前地址: 江苏省南京市雨花台区雨花街道华为南京研究所A区
-完整数据已保存到 C:/workspace/helper/reverse-geocode-response.json
+经纬度: 31.97951, 118.76740
 ```
 
-**通常只需读取 stdout 第一行的地址信息即可回复用户。** 仅当用户需要更详细的位置信息（经纬度、附近 POI 等）时，再读取输出的 JSON 文件。
+**通常只需读取 stdout 的地址与经纬度即可回复用户。** 未捕获到请求经纬度时第二行省略。
+
+如需更详细的位置信息（省市区等行政区划、附近 POI 等），请加 `--output DIR` 参数，脚本会额外保存一份 JSON 文件并在 stdout 末尾提示路径：
+
+```
+用户当前地址: 江苏省南京市雨花台区雨花街道华为南京研究所A区
+经纬度: 31.97951, 118.76740
+详细数据已保存到 C:/workspace/helper/reverse-geocode-response.json（包含省市区行政区划、附近 POI 等信息）
+```
+
+**不指定 `--output` 时不保存任何文件，仅标准输出地址与经纬度。**
 
 ## JSON 详细格式
 
-`reverse-geocode-response.json` 包含完整的逆地理编码数据，关键字段：
+`reverse-geocode-response.json` 是华为 reverseGeocode 接口响应经精简后的结果（原始响应中的 `aois`、`roads`、`intersections`、`returnDesc` 已移除，`pois` 仅保留 distance 最小的至多 2 个，`addressComponent` 中 `streetNumber`、`adminCode` 及 `city.cityId` 已移除），结构如下：
+
+```json
+{
+  "returnCode": "0",
+  "addressDescription": "完整地址文本",
+  "location": { "latitude": 31.97951, "longitude": 118.76740 },
+  "pois": [
+    { "name": "...", "address": "...", "distance": 0, "poiType": "...",
+      "location": { "latitude": 0, "longitude": 0 } }
+  ],
+  "addressComponent": {
+    "adminLevel1": "省", "adminLevel2": "市",
+    "adminLevel3": "区", "adminLevel4": "街道",
+    "countryCode": "CN", "countryName": "中国",
+    "city": { "cityName": "市", "cityCode": "区号" }
+  }
+}
+```
 
 | 字段 | 说明 |
 |---|---|
 | `returnCode` | `"0"` 表示成功 |
 | `addressDescription` | 完整的人类可读地址 |
+| `location` | 顶层经纬度，取自 reverseGeocode **请求 payload**（即本次查询的输入经纬度），是输出中最真实准确的定位坐标；未捕获到 payload 时该字段省略 |
 | `addressComponent` | 结构化行政区划：`adminLevel1`(省)、`adminLevel2`(市)、`adminLevel3`(区)、`adminLevel4`(街道) |
-| `pois` | 附近兴趣点列表（按距离排序），每个 POI 含 `name`、`address`、`distance`、`poiType`、`location`(经纬度) |
-| `roads` | 附近道路列表 |
-| `aois` | 所在区域面（商圈/园区等） |
+| `pois` | 附近兴趣点列表（按距离升序，至多 2 个），每个 POI 含 `name`、`address`、`distance`、`poiType`、`location`(经纬度) |
 
 ## 环境自检与修复
 

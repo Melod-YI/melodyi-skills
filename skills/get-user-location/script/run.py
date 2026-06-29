@@ -17,7 +17,8 @@
 环境变量优先于配置文件。
 
 输出:
-  <输出目录>/reverse-geocode-response.json
+  标准输出: 用户当前地址、经纬度
+  指定 --output DIR 时另存 <DIR>/reverse-geocode-response.json（含行政区划、POI 等）
 """
 
 import asyncio

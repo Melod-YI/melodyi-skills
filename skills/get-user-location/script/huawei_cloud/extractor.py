@@ -176,3 +176,32 @@ def save_result(data: Dict[str, Any], output_file: str) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     logger.info("数据已保存到 %s", output_file)
+
+
+def format_result(
+    address: str,
+    location: Optional[Dict[str, float]],
+    output_file: Optional[str],
+) -> str:
+    """
+    格式化最终标准输出文本
+
+    输出顺序：用户当前地址 → 经纬度（若有）→ 详细数据文件路径（若指定 --output）。
+    未捕获到经纬度时省略经纬度行；未指定 --output 时不输出文件路径行。
+
+    Args:
+        address: 用户当前地址（addressDescription）
+        location: 请求 payload 中提取的经纬度 {"latitude", "longitude"}，无则为 None
+        output_file: --output 指定时的输出文件路径，未指定为 None
+
+    Returns:
+        多行标准输出文本
+    """
+    lines = [f"用户当前地址: {address}"]
+    if location is not None:
+        lines.append(f"经纬度: {location['latitude']}, {location['longitude']}")
+    if output_file:
+        lines.append(
+            f"详细数据已保存到 {output_file}（包含省市区行政区划、附近 POI 等信息）"
+        )
+    return "\n".join(lines)

@@ -20,6 +20,7 @@ from .config import build_config, parse_args, validate_credentials
 from .extractor import (
     extract_data,
     extract_request_location,
+    format_result,
     save_result,
     simplify_response,
     validate_response,
@@ -50,7 +51,7 @@ async def run(argv: Optional[List[str]] = None) -> None:
       4. 注册网络拦截器
       5. 点击"查找设备"触发请求
       6. 提取并验证数据
-      7. 保存结果
+      7. 输出结果（指定 --output 时保存 JSON）
     """
     # 1. 解析参数 & 校验凭据（先于日志配置，需要 verbose 参数）
     args = parse_args(argv)
@@ -71,15 +72,16 @@ async def run(argv: Optional[List[str]] = None) -> None:
 
     logger.info("=== 华为云空间 - 查找设备定位数据提取 ===")
     logger.info("模式: %s", "有头浏览器" if config.headed else "无头浏览器")
-    logger.info("输出: %s", config.output_file)
+    logger.info("输出: %s", config.output_file or "仅标准输出，不保存文件")
 
-    # 确保输出目录存在
-    try:
-        os.makedirs(config.output_dir, exist_ok=True)
-    except OSError as e:
-        print(f"✗ 无法创建输出目录: {config.output_dir} ({e})", file=sys.stderr)
-        sys.exit(1)
-    logger.info("输出目录: %s", config.output_dir)
+    # 确保输出目录存在（未指定 --output 时跳过，不保存文件）
+    if config.output_dir:
+        try:
+            os.makedirs(config.output_dir, exist_ok=True)
+        except OSError as e:
+            print(f"✗ 无法创建输出目录: {config.output_dir} ({e})", file=sys.stderr)
+            sys.exit(1)
+        logger.info("输出目录: %s", config.output_dir)
 
     # 2~7. 启动浏览器并执行完整流程
     async with async_playwright() as pw:
@@ -112,11 +114,11 @@ async def run(argv: Optional[List[str]] = None) -> None:
             location = extract_request_location(interceptor.captured)
             if location is not None:
                 simplified["location"] = location
-            save_result(simplified, config.output_file)
+            if config.output_file:
+                save_result(simplified, config.output_file)
 
             # 输出最终结果
-            print(f"用户当前地址: {result['address']}")
-            print(f"精简数据已保存到 {config.output_file}")
+            print(format_result(result["address"], location, config.output_file))
 
             await context.close()
         finally:

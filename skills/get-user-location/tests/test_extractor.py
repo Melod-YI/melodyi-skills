@@ -268,3 +268,45 @@ class TestOutputIntegration:
 
         assert "location" not in simplified
 
+
+class TestFormatResult:
+    """format_result 标准输出格式化测试"""
+
+    LOC = {"latitude": 31.97951, "longitude": 118.7674}
+
+    def test_address_only_when_no_location_and_no_output(self):
+        """无经纬度、未指定 --output：仅输出地址一行。"""
+        text = extractor.format_result("南京市A区", None, None)
+        assert text == "用户当前地址: 南京市A区"
+
+    def test_includes_location_line(self):
+        """有经纬度、未指定 --output：地址 + 经纬度两行。"""
+        text = extractor.format_result("南京市A区", self.LOC, None)
+        assert text == (
+            "用户当前地址: 南京市A区\n经纬度: 31.97951, 118.7674"
+        )
+
+    def test_includes_output_file_line(self):
+        """指定 --output：追加详细数据文件路径行。"""
+        text = extractor.format_result(
+            "南京市A区", self.LOC, "C:/tmp/reverse-geocode-response.json"
+        )
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "经纬度: 31.97951, 118.7674\n"
+            "详细数据已保存到 C:/tmp/reverse-geocode-response.json"
+            "（包含省市区行政区划、附近 POI 等信息）"
+        )
+
+    def test_output_file_line_without_location(self):
+        """指定 --output 但无经纬度：省略经纬度行，仍提示文件路径。"""
+        text = extractor.format_result(
+            "南京市A区", None, "C:/tmp/reverse-geocode-response.json"
+        )
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "详细数据已保存到 C:/tmp/reverse-geocode-response.json"
+            "（包含省市区行政区划、附近 POI 等信息）"
+        )
+
+

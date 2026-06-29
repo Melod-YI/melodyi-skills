@@ -174,3 +174,21 @@ class TestBuildConfig:
         args = config.parse_args(["--config", str(tmp_path / "nope.json")])
         with pytest.raises(RuntimeError):
             config.build_config(args=args)
+
+    def test_output_defaults_none(self, clean_env, monkeypatch):
+        """不指定 --output 时不保存文件：output_dir / output_file 均为 None。"""
+        monkeypatch.setenv("HUAWEI_USERNAME", "env-user")
+        monkeypatch.setenv("HUAWEI_PASSWORD", "env-pwd")
+        args = config.parse_args([])
+        cfg = config.build_config(args=args)
+        assert cfg.output_dir is None
+        assert cfg.output_file is None
+
+    def test_output_resolves_file_path(self, clean_env, monkeypatch):
+        """指定 --output 时据其拼出输出文件路径。"""
+        monkeypatch.setenv("HUAWEI_USERNAME", "env-user")
+        monkeypatch.setenv("HUAWEI_PASSWORD", "env-pwd")
+        args = config.parse_args(["--output", "/tmp/out"])
+        cfg = config.build_config(args=args)
+        assert cfg.output_dir == "/tmp/out"
+        assert cfg.output_file == f"/tmp/out/{config.OUTPUT_FILENAME}"

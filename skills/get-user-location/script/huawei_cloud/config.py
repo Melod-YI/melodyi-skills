@@ -19,7 +19,6 @@
 import argparse
 import json
 import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -37,8 +36,8 @@ class Config:
     """运行时配置"""
     headed: bool
     verbose: bool
-    output_dir: str
-    output_file: str
+    output_dir: Optional[str]
+    output_file: Optional[str]
     username: str
     password: str
 
@@ -46,11 +45,6 @@ class Config:
 def normalize_path(path: str) -> str:
     """路径规范化：Windows 反斜杠转正斜杠，去掉末尾斜杠"""
     return path.replace("\\", "/").rstrip("/")
-
-
-def get_default_output_dir() -> str:
-    """获取默认输出目录（系统临时目录）"""
-    return normalize_path(tempfile.gettempdir())
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -68,7 +62,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "--output",
         metavar="DIR",
         default=None,
-        help="输出目录路径（默认使用系统临时目录）",
+        help="输出目录路径；不指定则不保存文件，仅标准输出地址与经纬度",
     )
     parser.add_argument(
         "--config",
@@ -141,8 +135,8 @@ def build_config(
     if args is None:
         args = parse_args(argv)
 
-    output_dir = args.output if args.output else get_default_output_dir()
-    output_file = f"{output_dir}/{OUTPUT_FILENAME}"
+    output_dir = args.output if args.output else None
+    output_file = f"{output_dir}/{OUTPUT_FILENAME}" if output_dir else None
 
     username, password = resolve_credentials(args.config)
     if not username or not password:
