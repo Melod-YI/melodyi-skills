@@ -60,3 +60,31 @@ def test_network_error_raises_api_error_zero():
     with pytest.raises(APIError) as exc:
         client.get_user()
     assert exc.value.status_code == 0
+
+
+def test_get_pr_request_and_parse():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json={"number": 123, "title": "feat: x"})
+
+    client = _client(handler)
+    data = client.get_pr("owner", "repo", "123")
+
+    assert data == {"number": 123, "title": "feat: x"}
+    assert captured["url"] == f"{API_BASE}/repos/owner/repo/pulls/123"
+
+
+def test_get_files_request_and_parse():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json=[{"filename": "a.py"}, {"filename": "b.py"}])
+
+    client = _client(handler)
+    data = client.get_files("owner", "repo", "123")
+
+    assert [f["filename"] for f in data] == ["a.py", "b.py"]
+    assert captured["url"] == f"{API_BASE}/repos/owner/repo/pulls/123/files"

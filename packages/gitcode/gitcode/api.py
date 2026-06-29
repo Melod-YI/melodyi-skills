@@ -74,3 +74,15 @@ class GitCodeClient:
     def get_user(self) -> dict:
         """获取当前 token 对应用户：GET /user"""
         return self._request("GET", "/user")
+
+    def get_pr(self, owner: str, repo: str, number: str) -> dict:
+        """获取 PR 详情：GET /repos/{owner}/{repo}/pulls/{number}"""
+        return self._request(
+            "GET", f"/repos/{owner}/{repo}/pulls/{number}"
+        )
+
+    def get_files(self, owner: str, repo: str, number: str) -> list:
+        """获取 PR 变更文件列表：GET /repos/{owner}/{repo}/pulls/{number}/files"""
+        return self._request(
+            "GET", f"/repos/{owner}/{repo}/pulls/{number}/files"
+        )
