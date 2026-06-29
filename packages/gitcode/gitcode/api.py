@@ -96,3 +96,28 @@ class GitCodeClient:
         return self._request(
             "GET", f"/repos/{owner}/{repo}/pulls/{number}/comments"
         )
+
+    def post_comment(
+        self,
+        owner: str,
+        repo: str,
+        number: str,
+        *,
+        body: str,
+        path: str,
+        position: int,
+        commit_id: Optional[str] = None,
+    ) -> dict:
+        """提交行内评论：POST /repos/{owner}/{repo}/pulls/{number}/comments
+
+        body 中文由 httpx json= 自动 UTF-8 编码，无需临时文件。
+        position 为 PR 分支版本文件中的绝对行号（1-based）。
+        """
+        payload: dict = {"body": body, "path": path, "position": position}
+        if commit_id:
+            payload["commit_id"] = commit_id
+        return self._request(
+            "POST",
+            f"/repos/{owner}/{repo}/pulls/{number}/comments",
+            json_body=payload,
+        )

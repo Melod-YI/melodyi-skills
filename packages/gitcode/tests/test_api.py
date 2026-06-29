@@ -106,3 +106,44 @@ def test_get_comments_request_and_parse():
     assert len(data) == 2
     assert data[0]["user"]["login"] == "alice"
     assert captured["url"] == f"{API_BASE}/repos/owner/repo/pulls/123/comments"
+
+
+def test_post_comment_request_body():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["method"] = request.method
+        captured["body"] = request.read()
+        return httpx.Response(201, json={"id": 99, "body": "**[严重]** 问题"})
+
+    client = _client(handler)
+    data = client.post_comment(
+        "owner", "repo", "123",
+        body="**[严重]** 问题", path="src/a.py", position=10,
+    )
+
+    assert data == {"id": 99, "body": "**[严重]** 问题"}
+    assert captured["method"] == "POST"
+    assert captured["url"] == f"{API_BASE}/repos/owner/repo/pulls/123/comments"
+    # 中文经 json= 自动 UTF-8 编码，能正确还原
+    import json as _json
+    assert _json.loads(captured["body"]) == {
+        "body": "**[严重]** 问题", "path": "src/a.py", "position": 10,
+    }
+
+
+def test_post_comment_with_commit_id():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.read()
+        return httpx.Response(201, json={})
+
+    client = _client(handler)
+    client.post_comment(
+        "owner", "repo", "123",
+        body="b", path="p", position=1, commit_id="abc",
+    )
+    import json as _json
+    assert _json.loads(captured["body"])["commit_id"] == "abc"
