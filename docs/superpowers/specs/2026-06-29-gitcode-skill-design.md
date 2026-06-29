@@ -32,8 +32,9 @@
 ```
 packages/gitcode/
   pyproject.toml              # 入点 gitcode=gitcode.cli:cli；依赖 click、httpx
-  src/gitcode/
+  gitcode/                    # 扁平布局（同 melodyi-filebot，非 src/）
     __init__.py
+    __main__.py
     cli.py                    # Click 命令组
     config.py                 # token 解析
     api.py                    # GitCodeClient(httpx)
@@ -42,6 +43,7 @@ packages/gitcode/
     test_url.py
     test_config.py
     test_api.py
+    test_cli.py
 skills/gitcode-pr-review/
   SKILL.md                    # 检视+验收，调用 gitcode CLI
 ```
@@ -57,7 +59,7 @@ skills/gitcode-pr-review/
 | `gitcode files <url>` | 变更文件列表 | JSON |
 | `gitcode comments <url> [--mine]` | 评论列表；`--mine` 仅当前用户 | JSON |
 | `gitcode comment <url> --path P --position N (--body-file F \| --body T) [--commit-id SHA]` | 提交行内评论 | JSON |
-| `gitcode resolve <url> --discussion-id D [--resolved true\|false]` | 更新评论解决状态 | JSON |
+| `gitcode resolve <url> --discussion-id D [--unresolved]` | 更新评论解决状态（默认已解决） | JSON |
 
 `<url>` 直接吃用户给的 PR 链接，`parse_pr_url()` 内部解析 owner/repo/number，兼容：
 
