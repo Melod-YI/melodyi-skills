@@ -44,3 +44,19 @@ def test_api_error_on_404():
     with pytest.raises(APIError) as exc:
         client.get_user()
     assert exc.value.status_code == 404
+
+
+def test_empty_body_returns_empty_dict():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"")
+    client = _client(handler)
+    assert client.get_user() == {}
+
+
+def test_network_error_raises_api_error_zero():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom")
+    client = _client(handler)
+    with pytest.raises(APIError) as exc:
+        client.get_user()
+    assert exc.value.status_code == 0
