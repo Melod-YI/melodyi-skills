@@ -1,0 +1,27 @@
+[project]
+name = "gitcode"
+version = "0.1.0"
+description = "GitCode PR 代码检视 CLI：封装 GitCode API 调用与 token 管理"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "httpx>=0.25",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+gitcode = "gitcode.cli:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gitcode"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
