@@ -43,3 +43,19 @@ def test_env_empty_falls_back_to_file(monkeypatch, tmp_path):
     cfg.write_text(json.dumps({"gitcode_token": "from-file"}), encoding="utf-8")
     monkeypatch.setenv("GITCODE_TOKEN", "   ")  # 空白视作未设置
     assert load_token(cfg) == "from-file"
+
+
+def test_corrupt_json_returns_none(monkeypatch, tmp_path):
+    """配置文件 JSON 损坏时返回 None，不抛异常"""
+    monkeypatch.delenv("GITCODE_TOKEN", raising=False)
+    cfg = tmp_path / "config.json"
+    cfg.write_text("{not valid json", encoding="utf-8")
+    assert load_token(cfg) is None
+
+
+def test_non_dict_json_returns_none(monkeypatch, tmp_path):
+    """配置文件内容非对象（如数组）时返回 None"""
+    monkeypatch.delenv("GITCODE_TOKEN", raising=False)
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+    assert load_token(cfg) is None
