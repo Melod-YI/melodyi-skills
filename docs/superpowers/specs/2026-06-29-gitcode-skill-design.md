@@ -69,7 +69,8 @@ skills/gitcode-pr-review/
 
 ## 配置与认证
 
-- token 来源优先级：`--token` > 环境变量 `GITCODE_TOKEN` > `~/.melodyi-skills/gitcode/config.json` 的 `gitcode_token`
+- token 来源优先级：环境变量 `GITCODE_TOKEN` > `~/.melodyi-skills/gitcode/config.json` 的 `gitcode_token`
+- CLI 提供 `--config PATH` 指定配置文件路径（覆盖默认位置，便于多账号/测试）；**不提供 `--token` 选项**，以免秘钥落入命令行/进程列表，违背"token 不暴露"目标
 - 配置目录用 `gitcode`（账号级 token，未来 submit/review/merge 三个 skill 共用同一份）
 - API base：`https://api.gitcode.com/api/v5`
 - 认证：`Authorization: Bearer {token}` 请求头（token 不进 URL/命令行/日志）
@@ -92,7 +93,7 @@ skills/gitcode-pr-review/
 ## 测试策略（TDD，不打真实 API）
 
 - `test_url.py`：三种 URL 格式解析 → owner/repo/number；非法 URL 报错
-- `test_config.py`：token 优先级（CLI > env > config，用临时配置文件与 `monkeypatch`）；缺失时报错并退出码 2
+- `test_config.py`：token 优先级（env > config，用临时配置文件与 `monkeypatch`）；缺失时返回 None
 - `test_api.py`：用 httpx `MockTransport` 注入假响应，验证各端点的请求 URL/headers/body 构造与响应解析；401/404 等状态码映射到退出码与错误信息
 
 ## SKILL.md 改写要点
