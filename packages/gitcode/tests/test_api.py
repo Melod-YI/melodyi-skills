@@ -88,3 +88,21 @@ def test_get_files_request_and_parse():
 
     assert [f["filename"] for f in data] == ["a.py", "b.py"]
     assert captured["url"] == f"{API_BASE}/repos/owner/repo/pulls/123/files"
+
+
+def test_get_comments_request_and_parse():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json=[
+            {"id": 1, "body": "x", "user": {"login": "alice"}},
+            {"id": 2, "body": "y", "user": {"login": "bob"}},
+        ])
+
+    client = _client(handler)
+    data = client.get_comments("owner", "repo", "123")
+
+    assert len(data) == 2
+    assert data[0]["user"]["login"] == "alice"
+    assert captured["url"] == f"{API_BASE}/repos/owner/repo/pulls/123/comments"

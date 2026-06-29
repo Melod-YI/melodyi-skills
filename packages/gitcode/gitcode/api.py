@@ -86,3 +86,13 @@ class GitCodeClient:
         return self._request(
             "GET", f"/repos/{owner}/{repo}/pulls/{number}/files"
         )
+
+    def get_comments(self, owner: str, repo: str, number: str) -> list:
+        """获取 PR 评论列表：GET /repos/{owner}/{repo}/pulls/{number}/comments
+
+        返回原始评论对象数组，含 id/body/path/position/user 等字段，
+        供调用方（cli --mine 或 agent）进一步筛选。
+        """
+        return self._request(
+            "GET", f"/repos/{owner}/{repo}/pulls/{number}/comments"
+        )
