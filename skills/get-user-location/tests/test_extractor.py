@@ -237,6 +237,66 @@ class TestExtractRequestLocation:
         assert extractor.extract_request_location({"request_body": payload}) is None
 
 
+class TestAnalyzeCaptures:
+    """多次捕获分析与入参不一致检测测试"""
+
+    LOC_A = '{"location":{"latitude":31.97,"longitude":118.76}}'
+    LOC_B = '{"location":{"latitude":32.00,"longitude":118.80}}'
+
+    def test_empty_raises(self):
+        with pytest.raises(RuntimeError):
+            extractor.analyze_captures([])
+
+    def test_single_capture_not_inconsistent(self):
+        caps = [{"body": "{}", "request_body": self.LOC_A}]
+        r = extractor.analyze_captures(caps)
+        assert r["count"] == 1
+        assert r["inconsistent"] is False
+        assert r["latest"] is caps[-1]
+
+    def test_multiple_same_location_not_inconsistent_latest_is_last(self):
+        caps = [
+            {"body": "{}", "request_body": self.LOC_A},
+            {"body": "{}", "request_body": self.LOC_A},
+        ]
+        r = extractor.analyze_captures(caps)
+        assert r["count"] == 2
+        assert r["inconsistent"] is False
+        # 取列表末尾（时间最新）为准
+        assert r["latest"] is caps[-1]
+
+    def test_multiple_different_locations_inconsistent(self):
+        caps = [
+            {"body": "{}", "request_body": self.LOC_A},
+            {"body": "{}", "request_body": self.LOC_B},
+        ]
+        r = extractor.analyze_captures(caps)
+        assert r["count"] == 2
+        assert r["inconsistent"] is True
+        assert r["latest"] is caps[-1]
+
+    def test_captures_missing_payload_skipped_in_comparison(self):
+        # 缺 payload 的捕获不参与比较；仅 1 个有效经纬度 -> 不一致为 False
+        caps = [
+            {"body": "{}", "request_body": None},
+            {"body": "{}", "request_body": self.LOC_A},
+        ]
+        r = extractor.analyze_captures(caps)
+        assert r["count"] == 2
+        assert r["inconsistent"] is False
+
+    def test_three_calls_two_distinct_locations_inconsistent(self):
+        caps = [
+            {"body": "{}", "request_body": self.LOC_A},
+            {"body": "{}", "request_body": self.LOC_A},
+            {"body": "{}", "request_body": self.LOC_B},
+        ]
+        r = extractor.analyze_captures(caps)
+        assert r["count"] == 3
+        assert r["inconsistent"] is True
+        assert r["latest"] is caps[-1]
+
+
 class TestOutputIntegration:
     """模拟 main 流程：精简响应 + 注入 payload 经纬度"""
 
@@ -280,10 +340,12 @@ class TestFormatResult:
         assert text == "用户当前地址: 南京市A区"
 
     def test_includes_location_line(self):
-        """有经纬度、未指定 --output：地址 + 经纬度两行。"""
+        """有经纬度、未指定 --output：地址 + 纬度/经度各一行（中英文标注）。"""
         text = extractor.format_result("南京市A区", self.LOC, None)
         assert text == (
-            "用户当前地址: 南京市A区\n经纬度: 31.97951, 118.7674"
+            "用户当前地址: 南京市A区\n"
+            "纬度(latitude): 31.97951\n"
+            "经度(longitude): 118.7674"
         )
 
     def test_includes_output_file_line(self):
@@ -293,7 +355,8 @@ class TestFormatResult:
         )
         assert text == (
             "用户当前地址: 南京市A区\n"
-            "经纬度: 31.97951, 118.7674\n"
+            "纬度(latitude): 31.97951\n"
+            "经度(longitude): 118.7674\n"
             "详细数据已保存到 C:/tmp/reverse-geocode-response.json"
             "（包含省市区行政区划、附近 POI 等信息）"
         )
@@ -307,6 +370,53 @@ class TestFormatResult:
             "用户当前地址: 南京市A区\n"
             "详细数据已保存到 C:/tmp/reverse-geocode-response.json"
             "（包含省市区行政区划、附近 POI 等信息）"
+        )
+
+
+class TestFormatResultWarning:
+    """多次调用入参不一致时的警告行测试"""
+
+    LOC = {"latitude": 31.97951, "longitude": 118.7674}
+    WARN = "⚠ 检测到 3 次定位请求且经纬度不一致，已采用最后一次结果"
+
+    def test_warning_after_location(self):
+        """有经纬度时警告紧跟经度行。"""
+        text = extractor.format_result("南京市A区", self.LOC, None, self.WARN)
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "纬度(latitude): 31.97951\n"
+            "经度(longitude): 118.7674\n"
+            "⚠ 检测到 3 次定位请求且经纬度不一致，已采用最后一次结果"
+        )
+
+    def test_warning_before_output_file(self):
+        """指定 --output 时警告在文件路径行之前。"""
+        text = extractor.format_result(
+            "南京市A区", self.LOC, "C:/tmp/x.json", self.WARN
+        )
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "纬度(latitude): 31.97951\n"
+            "经度(longitude): 118.7674\n"
+            "⚠ 检测到 3 次定位请求且经纬度不一致，已采用最后一次结果\n"
+            "详细数据已保存到 C:/tmp/x.json（包含省市区行政区划、附近 POI 等信息）"
+        )
+
+    def test_warning_without_location(self):
+        """无经纬度时警告紧跟地址行。"""
+        text = extractor.format_result("南京市A区", None, None, self.WARN)
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "⚠ 检测到 3 次定位请求且经纬度不一致，已采用最后一次结果"
+        )
+
+    def test_no_warning_unchanged(self):
+        """回归：不传 warning 时输出与原来一致。"""
+        text = extractor.format_result("南京市A区", self.LOC, None)
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "纬度(latitude): 31.97951\n"
+            "经度(longitude): 118.7674"
         )
 
 

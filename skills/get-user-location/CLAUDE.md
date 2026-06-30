@@ -44,16 +44,28 @@ python script/run.py --output . --headed --verbose
 
 ```
 用户当前地址: 江苏省南京市雨花台区雨花街道华为南京研究所A区
-经纬度: 31.97951, 118.76740
+纬度(latitude): 31.97951
+经度(longitude): 118.76740
 ```
 
-未捕获到请求经纬度时第二行省略。指定 `--output DIR` 时额外保存 JSON 并追加一行提示：
+未捕获到请求经纬度时纬度/经度两行省略。指定 `--output DIR` 时额外保存 JSON 并追加一行提示：
 
 ```
 用户当前地址: 江苏省南京市雨花台区雨花街道华为南京研究所A区
-经纬度: 31.97951, 118.76740
+纬度(latitude): 31.97951
+经度(longitude): 118.76740
 详细数据已保存到 C:/workspace/helper/reverse-geocode-response.json（包含省市区行政区划、附近 POI 等信息）
 ```
+
+### 多次调用与入参不一致
+
+「查找设备」页面可能短时间内对 `reverseGeocode` 发起多次调用。脚本采用**静默期等待**收集这些调用（首次捕获后连续 3s 无新调用即结束，首次后上限 15s，等待首次捕获超时 30s），**取时间最新的那次结果为准**。当多次调用的请求经纬度不一致时，stdout 在经纬度行之后追加一条警告：
+
+```
+⚠ 检测到 3 次定位请求且经纬度不一致，已采用最后一次结果
+```
+
+多次调用但经纬度一致时静默取最新，不追加警告。`--verbose` 会逐次打印每次请求的时间、入参经纬度、返回地址描述（无论是否一致）。
 
 ### JSON 文件结构
 
@@ -98,8 +110,9 @@ python script/run.py --output . --headed --verbose
 1. **配置**（`config.py`）：argparse 解析 CLI 参数 + 凭据（环境变量优先，回退配置文件）→ `Config` dataclass
 2. **浏览器**（`browser.py`）：启动 Chromium，注入反检测参数
 3. **认证**（`auth.py`）：导航到华为云 → 等待 iframe → 填写登录表单 → 验证登录成功
-4. **拦截**（`interceptor.py`）：被动监听 `reverseGeocode` 响应，同时捕获请求 payload（POST body，含查询经纬度）→ 点击「查找设备」触发请求
-5. **提取**（`extractor.py`）：解析响应 JSON → 校验 `returnCode` → 提取 `addressDescription` → 从请求 payload 提取查询经纬度 → 精简响应（移除无用字段、裁剪 pois）→ 注入顶层 `location` → 保存文件
+4. **拦截**（`interceptor.py`）：被动监听 `reverseGeocode` 响应，按到达顺序收集**每次**调用的响应与请求 payload（POST body，含查询经纬度）→ 点击「查找设备」触发请求 → 静默期等待收集可能的多次调用
+5. **分析 & 提取**（`extractor.py`）：`analyze_captures` 取最新一次捕获为准，并按请求经纬度检测多次调用是否入参不一致 → 解析响应 JSON → 校验 `returnCode` → 提取 `addressDescription` → 从最新请求 payload 提取查询经纬度 → 精简响应（移除无用字段、裁剪 pois）→ 注入顶层 `location` → 保存文件
+6. **输出**：多次调用且入参不一致时在 stdout 追加警告行；`--verbose` 逐次打印每次请求的时间、入参经纬度、返回地址
 
 **核心设计决策**：网络拦截使用 `page.on("response", callback)` 被动监听，而非 `route.fetch()` 主动拦截（Python 版 Playwright 的 `route.fetch()` 存在 bug）。
 

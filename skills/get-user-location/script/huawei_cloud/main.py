@@ -18,6 +18,7 @@ from .auth import fill_login_form, navigate_to_home, verify_login, wait_for_ifra
 from .browser import launch_browser
 from .config import build_config, parse_args, validate_credentials
 from .extractor import (
+    analyze_captures,
     extract_data,
     extract_request_location,
     format_result,
@@ -49,8 +50,8 @@ async def run(argv: Optional[List[str]] = None) -> None:
       2. 启动浏览器
       3. 导航至华为云首页 & 登录
       4. 注册网络拦截器
-      5. 点击"查找设备"触发请求
-      6. 提取并验证数据
+      5. 点击"查找设备"触发请求，静默期等待收集可能的多次调用
+      6. 分析多次捕获（取最新；入参不一致时生成警告）、提取并验证数据
       7. 输出结果（指定 --output 时保存 JSON）
     """
     # 1. 解析参数 & 校验凭据（先于日志配置，需要 verbose 参数）
@@ -102,23 +103,33 @@ async def run(argv: Optional[List[str]] = None) -> None:
 
             # 5. 点击查找设备 & 等待数据
             await click_find_device(page)
-            await wait_for_data(page)
+            await wait_for_data(page, interceptor)
 
-            # 6. 提取 & 验证
-            raw_data = extract_data(interceptor.captured)
+            # 6. 分析多次捕获、提取 & 验证
+            analysis = analyze_captures(interceptor.captures)
+            latest = analysis["latest"]
+            raw_data = extract_data(latest)
             result = validate_response(raw_data)
 
             # 7. 精简并保存结果
             simplified = simplify_response(raw_data)
             # 注入请求 payload 中的查询经纬度（最真实准确的定位点）
-            location = extract_request_location(interceptor.captured)
+            location = extract_request_location(latest)
             if location is not None:
                 simplified["location"] = location
             if config.output_file:
                 save_result(simplified, config.output_file)
 
+            # 多次调用且经纬度不一致时追加警告（取最新一次结果为准）
+            warning = None
+            if analysis["inconsistent"]:
+                warning = (
+                    f"⚠ 检测到 {analysis['count']} 次定位请求且经纬度不一致，"
+                    "已采用最后一次结果"
+                )
+
             # 输出最终结果
-            print(format_result(result["address"], location, config.output_file))
+            print(format_result(result["address"], location, config.output_file, warning))
 
             await context.close()
         finally:

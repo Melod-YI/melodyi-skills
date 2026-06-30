@@ -10,7 +10,7 @@
 import copy
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def extract_data(captured: Dict[str, Any]) -> Dict[str, Any]:
     从拦截器捕获的原始数据中提取 JSON 响应体
 
     Args:
-        captured: Interceptor.captured 原始数据
+        captured: 单次 reverseGeocode 捕获数据（Interceptor.captures 中的一个元素）
 
     Returns:
         解析后的 JSON 数据字典
@@ -89,7 +89,7 @@ def extract_request_location(captured: Dict[str, Any]) -> Optional[Dict[str, flo
     该经纬度为本次查询的输入点，是输出中最真实准确的定位坐标。
 
     Args:
-        captured: Interceptor.captured 原始数据（含 request_body）
+        captured: 单次 reverseGeocode 捕获数据（含 request_body）
 
     Returns:
         {"latitude": float, "longitude": float}；payload 缺失或无 location 时返回 None
@@ -118,6 +118,49 @@ def extract_request_location(captured: Dict[str, Any]) -> Optional[Dict[str, flo
 
     logger.info("从请求 payload 提取经纬度: %s, %s", latitude, longitude)
     return {"latitude": latitude, "longitude": longitude}
+
+
+def analyze_captures(captures: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    从多次 reverseGeocode 捕获中选出最终结果并检测入参不一致。
+
+    - 取列表末尾（即时间最新的）作为最终捕获；
+    - 对每次捕获提取请求 payload 中的 location 经纬度，若存在 ≥2 个互不相同的经纬度，
+      则判定为入参不一致；
+    - 经纬度缺失的捕获不参与不一致比较。
+
+    Args:
+        captures: Interceptor.captures，按到达顺序排列
+
+    Returns:
+        {"latest": dict, "count": int, "inconsistent": bool}
+
+    Raises:
+        RuntimeError: 捕获列表为空
+    """
+    if not captures:
+        raise RuntimeError("未捕获到任何请求")
+
+    latest = captures[-1]
+    distinct_locations = set()
+    for c in captures:
+        loc = extract_request_location(c)
+        if loc is not None:
+            distinct_locations.add((loc["latitude"], loc["longitude"]))
+
+    inconsistent = len(distinct_locations) > 1
+    logger.info(
+        "捕获分析: 共 %d 次，不同经纬度 %d 个，%s",
+        len(captures),
+        len(distinct_locations),
+        "入参不一致" if inconsistent else "入参一致",
+    )
+
+    return {
+        "latest": latest,
+        "count": len(captures),
+        "inconsistent": inconsistent,
+    }
 
 
 def simplify_response(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -182,24 +225,30 @@ def format_result(
     address: str,
     location: Optional[Dict[str, float]],
     output_file: Optional[str],
+    warning: Optional[str] = None,
 ) -> str:
     """
-    格式化最终标准输出文本
+    格式化最终标准输出文本。
 
-    输出顺序：用户当前地址 → 经纬度（若有）→ 详细数据文件路径（若指定 --output）。
-    未捕获到经纬度时省略经纬度行；未指定 --output 时不输出文件路径行。
+    输出顺序：用户当前地址 → 纬度/经度（各有中英文标注，若有）→ 警告（若有）→ 详细数据文件路径（若指定 --output）。
+    未捕获到经纬度时省略经纬度行；未指定 --output 时不输出文件路径行；
+    未发生入参不一致时 warning 为 None，省略警告行。
 
     Args:
         address: 用户当前地址（addressDescription）
         location: 请求 payload 中提取的经纬度 {"latitude", "longitude"}，无则为 None
         output_file: --output 指定时的输出文件路径，未指定为 None
+        warning: 多次调用且入参不一致时的警告文本，无则为 None
 
     Returns:
         多行标准输出文本
     """
     lines = [f"用户当前地址: {address}"]
     if location is not None:
-        lines.append(f"经纬度: {location['latitude']}, {location['longitude']}")
+        lines.append(f"纬度(latitude): {location['latitude']}")
+        lines.append(f"经度(longitude): {location['longitude']}")
+    if warning:
+        lines.append(warning)
     if output_file:
         lines.append(
             f"详细数据已保存到 {output_file}（包含省市区行政区划、附近 POI 等信息）"
