@@ -420,6 +420,31 @@ class TestFormatResultWarning:
         )
 
 
+class TestBuildWarning:
+    """build_warning 测试：仅 --verbose 且入参不一致时输出警告"""
+
+    INCONSISTENT = {"inconsistent": True, "count": 4}
+    CONSISTENT = {"inconsistent": False, "count": 4}
+
+    def test_verbose_inconsistent_returns_warning(self):
+        w = extractor.build_warning(self.INCONSISTENT, verbose=True)
+        assert w == "⚠ 检测到 4 次定位请求且经纬度不一致，已采用最后一次结果"
+
+    def test_non_verbose_inconsistent_returns_none(self):
+        """非 verbose 时不输出警告（静默取最新结果），避免噪音。"""
+        assert extractor.build_warning(self.INCONSISTENT, verbose=False) is None
+
+    def test_verbose_consistent_returns_none(self):
+        assert extractor.build_warning(self.CONSISTENT, verbose=True) is None
+
+    def test_non_verbose_consistent_returns_none(self):
+        assert extractor.build_warning(self.CONSISTENT, verbose=False) is None
+
+    def test_missing_keys_returns_none(self):
+        """analysis 缺 inconsistent 字段时不报错，返回 None。"""
+        assert extractor.build_warning({}, verbose=True) is None
+
+
 class TestFormatResultFavorites:
     """附近收藏点块（favorites_block）输出测试"""
 

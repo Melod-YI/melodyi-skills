@@ -221,6 +221,28 @@ def save_result(data: Dict[str, Any], output_file: str) -> None:
     logger.info("数据已保存到 %s", output_file)
 
 
+def build_warning(analysis: Dict[str, Any], verbose: bool) -> Optional[str]:
+    """
+    多次调用入参不一致时构建 stdout 警告文本。
+
+    仅在 verbose 模式下且检测到入参不一致时返回警告文本；否则返回 None
+    （非 verbose 时不向 stdout 输出该提示，静默取最新结果即可，避免噪音）。
+
+    Args:
+        analysis: analyze_captures 返回的分析结果（含 inconsistent / count）
+        verbose: 是否为详细模式（--verbose）
+
+    Returns:
+        警告文本或 None
+    """
+    if not verbose or not analysis.get("inconsistent"):
+        return None
+    return (
+        f"⚠ 检测到 {analysis['count']} 次定位请求且经纬度不一致，"
+        "已采用最后一次结果"
+    )
+
+
 def format_result(
     address: str,
     location: Optional[Dict[str, float]],
