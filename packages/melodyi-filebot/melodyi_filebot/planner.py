@@ -442,6 +442,9 @@ def draft_plan(
         folder_path = Path(folder["path"])
         files = [str(p) for p in sorted(folder_path.iterdir())
                  if p.suffix.lower() in VIDEO_EXTS] if folder_path.is_dir() else []
+        # 安全默认：避免后续分支未赋值时引用未定义变量
+        tmdb_season_present = False
+        use_bangumi = False
         if target["kind"] == "season":
             sn = target["season"]
             try:
@@ -452,12 +455,17 @@ def draft_plan(
                 tmdb_season_present = False
                 warnings.append(f"TMDB 无第 {sn} 季，来源切 bangumi: {folder['path']}")
                 logger.warning("TMDB 无第 %d 季，来源切 bangumi: %s", sn, folder['path'])
+            # 仅当 TMDB 无季且有 bangumi 来源时才切到 bangumi；否则保持 tmdb（generate-nfo 时将失败）
+            use_bangumi = (not tmdb_season_present) and folder_bg is not None
+            if not tmdb_season_present and not folder_bg:
+                warnings.append(f"TMDB 无第 {sn} 季且无 bangumi 来源，generate-nfo 时将失败: {folder['path']}")
+                logger.warning("TMDB 无第 %d 季且无 bangumi 来源: %s", sn, folder['path'])
             if sn not in seasons_seen:
                 src = NfoSource(
-                    provider="bangumi" if not tmdb_season_present else "tmdb",
-                    tmdb_id=tmdb_id if tmdb_season_present else None,
-                    season=sn if tmdb_season_present else None,
-                    bangumi_subject_id=folder_bg if not tmdb_season_present else None,
+                    provider="bangumi" if use_bangumi else "tmdb",
+                    tmdb_id=tmdb_id if not use_bangumi else None,
+                    season=sn if not use_bangumi else None,
+                    bangumi_subject_id=folder_bg if use_bangumi else None,
                 )
                 seasons_seen[sn] = SeasonEntry(season=sn, source=src)
         elif target["kind"] == "episode_group":
@@ -486,12 +494,16 @@ def draft_plan(
                 warnings.append(f"无法解析集号: {f}")
                 logger.warning("无法解析集号: %s", f)
                 continue
+            # TMDB 季存在时校验集号是否在 TMDB 集列表中
+            if tmdb_season_present and ep not in tmdb_eps:
+                warnings.append(f"TMDB 第 {sn} 季无第 {ep} 集: {f}")
+                logger.warning("TMDB 第 %d 季无第 %d 集: %s", sn, ep, f)
             bg_ep = bg_eps.get(ep)
             src = NfoSource(
-                provider="bangumi" if not tmdb_season_present else "tmdb",
-                tmdb_id=tmdb_id if tmdb_season_present else None,
-                season=sn if tmdb_season_present else None,
-                episode=ep if tmdb_season_present else None,
+                provider="bangumi" if use_bangumi else "tmdb",
+                tmdb_id=tmdb_id if not use_bangumi else None,
+                season=sn if not use_bangumi else None,
+                episode=ep if not use_bangumi else None,
                 bangumi_subject_id=folder_bg,
                 bangumi_episode_id=bg_ep.episode_id if bg_ep else None,
             )

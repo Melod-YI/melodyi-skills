@@ -677,3 +677,45 @@ class TestDraftPlan:
         assert e.source.provider == "bangumi"
         assert e.source.bangumi_episode_id == 555
         assert any("TMDB 无第 3 季" in w for w in plan.warnings)
+
+    def test_episode_group_target_placeholder(self, tmp_path):
+        """episode_group target：占位 source（provider=tmdb），target.season 默认 1"""
+        from melodyi_filebot import planner
+        (tmp_path / "E01.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 154494},
+                "folders": [{"path": str(tmp_path),
+                             "target": {"kind": "episode_group", "group_id": "abc"}}]}
+        plan = planner.draft_plan(
+            spec, language="zh-CN",
+            fetch_show_summary=lambda tid, language="zh-CN": self._fake_show(),
+            fetch_season_episodes=lambda tid, sn, language="zh-CN": [],
+            fetch_bangumi_episodes=lambda sid, ep_type=0: [],
+        )
+        assert len(plan.episodes) == 1
+        e = plan.episodes[0]
+        assert e.source.provider == "tmdb"
+        assert e.source.tmdb_id == 154494
+        assert e.target.season == 1  # 默认
+        assert e.target.episode == 1
+
+    def test_tmdb_missing_season_no_bangumi_warns(self, tmp_path):
+        """TMDB 无季且无 bangumi → 不产生 broken bangumi source，告警"""
+        from melodyi_filebot import planner
+        (tmp_path / "E01.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 1},
+                "folders": [{"path": str(tmp_path), "target": {"kind": "season", "season": 5}}]}
+        def fake_show(tid, language="zh-CN"):
+            from melodyi_filebot.models import ShowSummary
+            return ShowSummary(tmdb_id=1, title="x", original_title="", year=2020,
+                               total_seasons=1, total_episodes=1, seasons=[])
+        def fake_season_eps(tid, sn, language="zh-CN"):
+            raise RuntimeError("TMDB 无此季")
+        plan = planner.draft_plan(
+            spec, language="zh-CN",
+            fetch_show_summary=fake_show, fetch_season_episodes=fake_season_eps,
+            fetch_bangumi_episodes=lambda sid, ep_type=0: [],
+        )
+        # 不应出现 provider=bangumi 但所有 id 为 None 的 broken source
+        assert all(e.source.provider != "bangumi" or e.source.bangumi_subject_id is not None
+                   for e in plan.episodes)
+        assert any("无 bangumi 来源" in w for w in plan.warnings)
