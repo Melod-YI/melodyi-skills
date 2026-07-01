@@ -520,3 +520,68 @@ def draft_plan(
                 len(seasons_seen), len(episodes), len(warnings))
     return Plan(show=show_ref, seasons=list(seasons_seen.values()),
                 episodes=episodes, warnings=warnings)
+
+
+def build_plan_from_plan(plan: "Plan", dest_root: str, with_nfo: bool = True) -> BuildPlanResult:
+    """Plan → BuildPlanResult（move + nfo 操作）
+
+    Args:
+        plan: 纯映射 Plan（agent 编辑后）
+        dest_root: 目标媒体根目录
+        with_nfo: 是否生成 nfo 操作
+
+    Returns:
+        BuildPlanResult（operations + nfo_operations，spec_applied="plan"）
+    """
+    from melodyi_filebot.models import ShowSummary, NfoOperation, NfoSource
+    logger.info("按 Plan 构建执行清单: tmdb_id=%s, 集数=%d, nfo=%s",
+                plan.show.tmdb_id, len(plan.episodes), with_nfo)
+    # 用 ShowRef 构造 ShowSummary 复用既有命名函数
+    show = ShowSummary(
+        tmdb_id=plan.show.tmdb_id, title=plan.show.title,
+        original_title=plan.show.original_title, year=plan.show.year,
+        total_seasons=len(plan.seasons), total_episodes=len(plan.episodes),
+        seasons=[], episode_groups=[],
+    )
+    dest_root = os.path.normpath(dest_root)
+    show_dir = os.path.join(dest_root, _show_folder(show))
+    operations: List[PlanOperation] = [PlanOperation(type="mkdir", path=show_dir)]
+    nfo_operations: list = []
+    warnings: list = list(plan.warnings)
+    created_seasons: set = set()
+    for m in plan.episodes:
+        if m.target.episode is None:
+            warnings.append(f"映射缺少集号，跳过: {m.file}")
+            continue
+        season = m.target.season
+        season_dir = os.path.join(show_dir, _season_folder(season))
+        if season not in created_seasons:
+            operations.append(PlanOperation(type="mkdir", path=season_dir))
+            created_seasons.add(season)
+        ext = Path(m.file).suffix
+        target_name = _episode_filename(
+            show, season, m.target.episode, m.target.episode_end, m.target.part, ext)
+        target = os.path.join(season_dir, target_name)
+        operations.append(PlanOperation(type="move", source=os.path.normpath(m.file), path=target))
+        operations.extend(_companion_ops(m.file, target, target_name))
+        if with_nfo:
+            ep_nfo_path = target.rsplit(".", 1)[0] + ".nfo"
+            nfo_operations.append(NfoOperation(
+                type="episode", path=ep_nfo_path, season=season, episode=m.target.episode,
+                source=m.source))
+    if with_nfo:
+        # tvshow nfo
+        show_source = NfoSource(provider="tmdb", tmdb_id=plan.show.tmdb_id,
+                                bangumi_subject_id=plan.show.bangumi_subject_id)
+        nfo_operations.insert(0, NfoOperation(
+            type="tvshow", path=os.path.join(show_dir, "tvshow.nfo"), source=show_source))
+        # season nfo（每个出现的季）
+        season_sources = {s.season: s.source for s in plan.seasons}
+        for sn in created_seasons:
+            nfo_operations.append(NfoOperation(
+                type="season", path=os.path.join(show_dir, _season_folder(sn), "season.nfo"),
+                season=sn, source=season_sources.get(sn, NfoSource(provider="tmdb", tmdb_id=plan.show.tmdb_id, season=sn))))
+    logger.info("按 Plan 构建执行清单完成: 操作数=%d, nfo 操作数=%d",
+                len(operations), len(nfo_operations))
+    return BuildPlanResult(operations=operations, nfo_operations=nfo_operations,
+                           spec_applied="plan", warnings=warnings)

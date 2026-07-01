@@ -719,3 +719,61 @@ class TestDraftPlan:
         assert all(e.source.provider != "bangumi" or e.source.bangumi_subject_id is not None
                    for e in plan.episodes)
         assert any("无 bangumi 来源" in w for w in plan.warnings)
+
+
+class TestBuildPlanFromPlan:
+    """build_plan_from_plan: Plan → BuildPlanResult（move + nfo 操作）"""
+
+    def _plan(self, tmp_path):
+        from melodyi_filebot.models import (
+            Plan, ShowRef, SeasonEntry, EpisodeEntry, FileTarget, NfoSource)
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "E01.mkv").write_bytes(b"x")
+        return Plan(
+            show=ShowRef(tmdb_id=154494, title="莉可丽丝", year=2022, language="zh-CN"),
+            seasons=[SeasonEntry(season=1, source=NfoSource(provider="tmdb", tmdb_id=154494, season=1))],
+            episodes=[EpisodeEntry(
+                file=str(src / "E01.mkv"),
+                target=FileTarget(season=1, episode=1),
+                source=NfoSource(provider="tmdb", tmdb_id=154494, season=1, episode=1))],
+            warnings=[],
+        )
+
+    def test_generates_move_and_nfo_ops(self, tmp_path):
+        from melodyi_filebot import planner
+        plan = self._plan(tmp_path)
+        dest = tmp_path / "dest"
+        result = planner.build_plan_from_plan(plan, str(dest), with_nfo=True)
+        # fs 操作：mkdir 剧 + mkdir 季 + move 视频
+        assert any(o.type == "mkdir" and "tmdbid-154494" in o.path for o in result.operations)
+        assert any(o.type == "mkdir" and "Season 01" in o.path for o in result.operations)
+        assert any(o.type == "move" for o in result.operations)
+        # nfo 操作：1 tvshow + 1 season + 1 episode
+        assert any(o.type == "tvshow" for o in result.nfo_operations)
+        assert any(o.type == "season" and o.season == 1 for o in result.nfo_operations)
+        ep_nfo = next(o for o in result.nfo_operations if o.type == "episode")
+        assert ep_nfo.path.endswith(".nfo")
+        assert "S01E01" in ep_nfo.path
+        assert ep_nfo.source.tmdb_id == 154494
+
+    def test_no_nfo_ops_when_with_nfo_false(self, tmp_path):
+        from melodyi_filebot import planner
+        plan = self._plan(tmp_path)
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=False)
+        assert result.nfo_operations == []
+
+    def test_episode_nfo_path_matches_video_stem(self, tmp_path):
+        """集 nfo 路径 = 视频 move 目标 stem + .nfo"""
+        from melodyi_filebot import planner
+        plan = self._plan(tmp_path)
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=True)
+        move = next(o for o in result.operations if o.type == "move")
+        ep_nfo = next(o for o in result.nfo_operations if o.type == "episode")
+        assert ep_nfo.path == move.path.rsplit(".", 1)[0] + ".nfo"
+
+    def test_spec_applied_is_plan(self, tmp_path):
+        from melodyi_filebot import planner
+        plan = self._plan(tmp_path)
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=True)
+        assert result.spec_applied == "plan"
