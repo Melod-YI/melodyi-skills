@@ -81,11 +81,63 @@ class GitCodeClient:
             "GET", f"/repos/{owner}/{repo}/pulls/{number}"
         )
 
+    def list_prs(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        state: str = "all",
+        author: Optional[str] = None,
+    ) -> list:
+        """列出仓库 PR：GET /repos/{owner}/{repo}/pulls
+
+        内部分页（per_page=100，循环 page 直到返回不足一页），返回全部 PR 原始对象。
+        每个 PR 对象含 number/title/state/user.login/added_lines/removed_lines 等。
+
+        Args:
+            state: all/open/closed/merged/locked，默认 all
+            author: 可选，按创建者用户名过滤
+        """
+        params: dict = {"state": state, "per_page": 100}
+        if author:
+            params["author"] = author
+        results: list = []
+        page = 1
+        while True:
+            params["page"] = page
+            batch = self._request(
+                "GET", f"/repos/{owner}/{repo}/pulls", params=params
+            )
+            if not isinstance(batch, list):
+                # 防御：API 异常返回非数组时按空处理，避免无限循环
+                break
+            results.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        return results
+
     def get_files(self, owner: str, repo: str, number: str) -> list:
-        """获取 PR 变更文件列表：GET /repos/{owner}/{repo}/pulls/{number}/files"""
-        return self._request(
-            "GET", f"/repos/{owner}/{repo}/pulls/{number}/files"
-        )
+        """获取 PR 变更文件列表：GET /repos/{owner}/{repo}/pulls/{number}/files
+
+        内部分页（per_page=100），返回全部变更文件对象。
+        每个文件对象含 filename/status/additions(string)/deletions(string)。
+        """
+        results: list = []
+        page = 1
+        while True:
+            batch = self._request(
+                "GET",
+                f"/repos/{owner}/{repo}/pulls/{number}/files",
+                params={"page": page, "per_page": 100},
+            )
+            if not isinstance(batch, list):
+                break
+            results.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        return results
 
     def get_comments(self, owner: str, repo: str, number: str) -> list:
         """获取 PR 评论列表：GET /repos/{owner}/{repo}/pulls/{number}/comments
