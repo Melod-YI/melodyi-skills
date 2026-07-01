@@ -124,3 +124,67 @@ class TestEpisodeGroupModels:
         assert d.group_count == 2
         assert d.sub_groups[0].name == "正片"
         assert d.sub_groups[0].episodes[0].season_number == 1
+
+
+class TestPlanModels:
+    """P2 Plan 结构测试"""
+
+    def test_file_target(self):
+        from melodyi_filebot.models import FileTarget
+        t = FileTarget(season=1, episode=5, episode_end=None, part=None)
+        assert t.season == 1 and t.episode == 5
+
+    def test_nfo_source_tmdb(self):
+        from melodyi_filebot.models import NfoSource
+        s = NfoSource(provider="tmdb", tmdb_id=154494, season=1, episode=1)
+        assert s.provider == "tmdb" and s.tmdb_id == 154494
+
+    def test_nfo_source_bangumi(self):
+        from melodyi_filebot.models import NfoSource
+        s = NfoSource(provider="bangumi", bangumi_subject_id=364450, bangumi_episode_id=1111258)
+        assert s.bangumi_subject_id == 364450
+
+    def test_episode_entry_three_blocks(self):
+        """集三块：file / target / source"""
+        from melodyi_filebot.models import EpisodeEntry, FileTarget, NfoSource
+        e = EpisodeEntry(
+            file="D:/src/ep01.mkv",
+            target=FileTarget(season=1, episode=1),
+            source=NfoSource(provider="tmdb", tmdb_id=154494, season=1, episode=1),
+        )
+        assert e.file.endswith("ep01.mkv")
+        assert e.target.season == 1
+        assert e.source.tmdb_id == 154494
+
+    def test_plan_structure(self):
+        from melodyi_filebot.models import Plan, ShowRef, SeasonEntry, EpisodeEntry, FileTarget, NfoSource
+        p = Plan(
+            show=ShowRef(tmdb_id=154494, bangumi_subject_id=364450,
+                         title="莉可丽丝", year=2022, language="zh-CN"),
+            seasons=[SeasonEntry(season=1, source=NfoSource(provider="tmdb", tmdb_id=154494, season=1))],
+            episodes=[EpisodeEntry(
+                file="D:/src/ep01.mkv",
+                target=FileTarget(season=1, episode=1),
+                source=NfoSource(provider="tmdb", tmdb_id=154494, season=1, episode=1),
+            )],
+            warnings=[],
+        )
+        assert p.show.tmdb_id == 154494
+        assert len(p.seasons) == 1
+        assert p.episodes[0].source.tmdb_id == 154494
+
+    def test_nfo_operation(self):
+        from melodyi_filebot.models import NfoOperation, NfoSource
+        op = NfoOperation(type="episode", path=".../S01E01.nfo", season=1, episode=1,
+                          source=NfoSource(provider="tmdb", tmdb_id=154494, season=1, episode=1))
+        assert op.type == "episode"
+
+    def test_build_plan_result_has_nfo_operations(self):
+        from melodyi_filebot.models import BuildPlanResult, NfoOperation, NfoSource
+        r = BuildPlanResult(operations=[], nfo_operations=[
+            NfoOperation(type="tvshow", path=".../tvshow.nfo",
+                         source=NfoSource(provider="tmdb", tmdb_id=154494))
+        ])
+        assert len(r.nfo_operations) == 1
+        # 默认空
+        assert BuildPlanResult(operations=[]).nfo_operations == []

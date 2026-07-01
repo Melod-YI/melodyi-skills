@@ -160,9 +160,10 @@ class PlanOperation(BaseModel):
 
 
 class BuildPlanResult(BaseModel):
-    """build-plan 结果"""
+    """build-plan 结果（执行清单：move + nfo 操作）"""
 
     operations: List[PlanOperation]
+    nfo_operations: List["NfoOperation"] = Field(default_factory=list)
     spec_applied: str = "standard"
     warnings: List[str] = Field(default_factory=list)
 
@@ -229,4 +230,63 @@ class PathAnalysis(BaseModel):
     by_depth: Optional[dict] = None  # 截断时：目录层(str) -> 目录数
 
 
+class FileTarget(BaseModel):
+    """集的展示身份（决定文件名/目录/NFO season-episode 字段）"""
+    season: int
+    episode: int
+    episode_end: Optional[int] = None
+    part: Optional[int] = None
+
+
+class NfoSource(BaseModel):
+    """元数据来源 spec（不含内容，只记 id 坐标）"""
+    provider: str = "tmdb"  # "tmdb" | "bangumi"
+    tmdb_id: Optional[int] = None
+    season: Optional[int] = None
+    episode: Optional[int] = None
+    bangumi_subject_id: Optional[int] = None
+    bangumi_episode_id: Optional[int] = None
+
+
+class SeasonEntry(BaseModel):
+    """Plan 中某季的来源"""
+    season: int
+    source: NfoSource
+
+
+class EpisodeEntry(BaseModel):
+    """Plan 中单集（三块：file / target / source）"""
+    file: str
+    target: FileTarget
+    source: NfoSource
+
+
+class ShowRef(BaseModel):
+    """Plan 中剧级信息"""
+    tmdb_id: int
+    bangumi_subject_id: Optional[int] = None
+    title: str = ""
+    original_title: str = ""
+    year: Optional[int] = None
+    language: str = "zh-CN"
+
+
+class Plan(BaseModel):
+    """纯映射 Plan（agent 编辑对象）"""
+    show: ShowRef
+    seasons: List[SeasonEntry] = Field(default_factory=list)
+    episodes: List[EpisodeEntry] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
+class NfoOperation(BaseModel):
+    """执行清单中的 NFO 写入操作"""
+    type: str  # "tvshow" | "season" | "episode"
+    path: str
+    season: Optional[int] = None
+    episode: Optional[int] = None
+    source: NfoSource
+
+
 TreeNode.model_rebuild()
+BuildPlanResult.model_rebuild()
