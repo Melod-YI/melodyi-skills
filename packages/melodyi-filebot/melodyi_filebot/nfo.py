@@ -8,8 +8,11 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Optional
 from xml.sax.saxutils import escape
+
+from melodyi_filebot.models import NfoOperation
 
 logger = logging.getLogger(__name__)
 
@@ -255,3 +258,145 @@ def build_episode_xml(ep: dict, bangumi_data: Optional[dict], show_title: str,
         parts.append(_streamdetails_xml(stream_details))
     parts.append("</episodedetails>")
     return "\n".join(parts)
+
+
+def _bg_to_dict(obj) -> Optional[dict]:
+    """将 bangumi 模型/字典转为 build_*_xml 期望的 dict 形态
+
+    BangumiSubjectSummary 字段名为 subject_id、BangumiEpisodeBrief 为 episode_id，
+    而 build_*_xml 用 bg.get("id") 取 bangumi id 写 <uniqueid type="bgm">，
+    故此处做一次字段名归一化，保证真实 fetch（返回 pydantic 模型）与单测注入的
+    原生 dict（已含 id）都能正确输出 bgm uniqueid。
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        d = dict(obj)
+    elif hasattr(obj, "model_dump"):
+        d = obj.model_dump()
+    else:
+        d = dict(getattr(obj, "__dict__", {}) or {})
+    if "id" not in d:
+        if "subject_id" in d:
+            d["id"] = d["subject_id"]
+        elif "episode_id" in d:
+            d["id"] = d["episode_id"]
+    return d
+
+
+def generate_nfo(op: NfoOperation, language: str = "zh-CN", dry_run: bool = True,
+                 dateadded: Optional[str] = None,
+                 show_detail: Optional[dict] = None,
+                 fetch_show_detail=None, fetch_season_detail=None,
+                 fetch_bangumi_subject=None, fetch_bangumi_episodes=None,
+                 probe_stream=None, video_path: Optional[str] = None) -> Optional[str]:
+    """按 NfoOperation 来源拉取 + 生成 XML + 写文件
+
+    Args:
+        op: NFO 写入操作（类型/路径/来源）
+        language: 语言
+        dry_run: True 只返回路径不写盘
+        dateadded: 时间戳字符串（不传则用 datetime.now()）
+        show_detail: 剧详情 dict（CLI 可预取传入避免重复拉取）；None 则按需拉取
+        fetch_*: 可注入的 fetch 函数（单测用），默认接 tmdb/bangumi 模块
+        probe_stream: ffprobe 函数（单测注入）
+        video_path: 集操作对应的视频路径（跑 ffprobe 用）
+
+    Returns:
+        写入的 .nfo 路径（dry_run 也返回路径但不写盘）
+    """
+    if dateadded is None:
+        from datetime import datetime
+        dateadded = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if fetch_show_detail is None:
+        from melodyi_filebot import tmdb
+        fetch_show_detail = tmdb.get_show_detail_full
+    if fetch_season_detail is None:
+        from melodyi_filebot import tmdb
+        fetch_season_detail = tmdb.get_season_detail
+    if fetch_bangumi_subject is None:
+        from melodyi_filebot import bangumi
+        fetch_bangumi_subject = bangumi.get_subject
+    if fetch_bangumi_episodes is None:
+        from melodyi_filebot import bangumi
+        fetch_bangumi_episodes = bangumi.get_subject_episodes
+    if probe_stream is None:
+        from melodyi_filebot.structure import probe_stream_details
+        probe_stream = probe_stream_details
+
+    src = op.source
+    logger.info("generate_nfo 开始: type=%s path=%s provider=%s", op.type, op.path, src.provider)
+
+    def _get_show_detail():
+        nonlocal show_detail
+        if show_detail is None and src.tmdb_id is not None:
+            logger.info("拉取剧详情: tmdb_id=%s", src.tmdb_id)
+            show_detail = fetch_show_detail(src.tmdb_id, language=language)
+        return show_detail or {}
+
+    def _bg_subject_data():
+        if not src.bangumi_subject_id:
+            return None
+        try:
+            return _bg_to_dict(fetch_bangumi_subject(src.bangumi_subject_id))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("bangumi subject 拉取失败: %s", exc)
+            return None
+
+    if op.type == "tvshow":
+        show = _get_show_detail()
+        xml = build_tvshow_xml(show, _bg_subject_data(), language, dateadded=dateadded)
+    elif op.type == "season":
+        if src.provider == "tmdb" and src.tmdb_id is not None:
+            logger.info("拉取季详情: tmdb_id=%s season=%s", src.tmdb_id, src.season)
+            season = fetch_season_detail(src.tmdb_id, src.season, language=language)
+        else:
+            season = {}
+        show = _get_show_detail()
+        show_actors = ((show.get("aggregate_credits") or {}).get("cast")) or []
+        xml = build_season_xml(season, _bg_subject_data(), show_actors, op.season,
+                               tmdb_id=src.tmdb_id,
+                               bangumi_subject_id=src.bangumi_subject_id if src.provider == "bangumi" else None,
+                               dateadded=dateadded)
+    elif op.type == "episode":
+        if src.provider == "tmdb" and src.tmdb_id is not None:
+            logger.info("拉取集详情: tmdb_id=%s season=%s", src.tmdb_id, src.season)
+            season = fetch_season_detail(src.tmdb_id, src.season, language=language)
+            ep = next((e for e in (season.get("episodes") or [])
+                       if e.get("episode_number") == src.episode), {})
+        else:
+            season, ep = {}, {}
+        show = _get_show_detail()
+        show_title = show.get("name", "")
+        # bangumi 集数据（按 episode_id 或集号匹配）
+        bg_ep = None
+        if src.bangumi_subject_id:
+            try:
+                bg_eps = fetch_bangumi_episodes(src.bangumi_subject_id)
+                if src.bangumi_episode_id is not None:
+                    bg_ep = next((e for e in bg_eps if e.episode_id == src.bangumi_episode_id), None)
+                elif src.episode is not None:
+                    bg_ep = next((e for e in bg_eps if (e.ep or int(e.sort)) == src.episode), None)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("bangumi 集拉取失败: %s", exc)
+        bg_data = _bg_to_dict(bg_ep)
+        sd = None
+        if video_path:
+            try:
+                logger.info("ffprobe: %s", video_path)
+                sd = probe_stream(Path(video_path))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("ffprobe 失败: %s", exc)
+        xml = build_episode_xml(ep, bg_data, show_title,
+                                target_season=op.season, target_episode=op.episode,
+                                stream_details=sd, tmdb_id=src.tmdb_id, dateadded=dateadded)
+    else:
+        raise ValueError(f"未知 nfo 类型: {op.type}")
+
+    if dry_run:
+        logger.info("dry-run 未写盘: %s", op.path)
+        return op.path
+    Path(op.path).parent.mkdir(parents=True, exist_ok=True)
+    Path(op.path).write_text(xml, encoding="utf-8")
+    logger.info("NFO 已写: %s", op.path)
+    return op.path

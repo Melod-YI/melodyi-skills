@@ -197,3 +197,113 @@ class TestEpisodeXml:
             target_season=1, target_episode=1, stream_details=None,
         )
         assert "<fileinfo>" not in xml
+
+
+import os
+from melodyi_filebot.models import NfoOperation, NfoSource
+
+
+class TestGenerateNfo:
+    def test_generate_tvshow_writes_xml(self, tmp_path):
+        op = NfoOperation(type="tvshow", path=str(tmp_path / "tvshow.nfo"),
+                          source=NfoSource(provider="tmdb", tmdb_id=154494, bangumi_subject_id=364450))
+
+        def fake_show(tid, language="zh-CN"):
+            return {"id": 154494, "name": "莉可丽丝", "overview": "x" * 50,
+                    "episode_run_time": [24], "genres": [], "networks": [],
+                    "external_ids": {}, "aggregate_credits": {"cast": []},
+                    "keywords": {"results": []}, "content_ratings": {"results": []},
+                    "created_by": [], "poster_path": None, "backdrop_path": None,
+                    "first_air_date": "2022-07-02", "last_air_date": None,
+                    "in_production": False, "vote_average": 8.5}
+
+        def fake_bg_subject(sid):
+            return {"id": 364450, "summary": "", "name_cn": ""}
+
+        path = nfo.generate_nfo(op, language="zh-CN", dry_run=False,
+                                dateadded="2026-07-01 12:00:00",
+                                fetch_show_detail=fake_show,
+                                fetch_bangumi_subject=fake_bg_subject)
+        assert path.endswith("tvshow.nfo")
+        content = open(path, encoding="utf-8").read()
+        assert "<tvshow>" in content and "莉可丽丝" in content
+        assert "<dateadded>2026-07-01 12:00:00</dateadded>" in content
+        assert '<uniqueid type="bgm">364450</uniqueid>' in content
+
+    def test_generate_episode_with_streamdetails(self, tmp_path):
+        video = tmp_path / "e.mkv"
+        video.write_bytes(b"x")
+        op = NfoOperation(type="episode", path=str(tmp_path / "e.nfo"), season=1, episode=1,
+                          source=NfoSource(provider="tmdb", tmdb_id=154494, season=1, episode=1))
+        show_detail = {"id": 154494, "name": "莉可丽丝", "overview": "x" * 50,
+                       "episode_run_time": [24], "aggregate_credits": {"cast": []},
+                       "external_ids": {}, "keywords": {"results": []},
+                       "content_ratings": {"results": []}, "created_by": [],
+                       "genres": [], "networks": [], "poster_path": None,
+                       "backdrop_path": None, "first_air_date": "2022-07-02",
+                       "last_air_date": None, "in_production": False, "vote_average": 0}
+
+        def fake_season(tid, sn, language="zh-CN"):
+            return {"season_number": 1, "name": "S1", "episodes": [
+                {"episode_number": 1, "name": "e1", "overview": "x" * 50, "season_number": 1,
+                 "runtime": 24, "air_date": "2022-07-02", "still_path": None,
+                 "vote_average": 8.0, "guest_stars": [], "crew": []}]}
+
+        def fake_probe(path):
+            return {"video": {"codec": "h264", "width": 1920, "height": 1080},
+                    "audio": {"codec": "aac", "channels": 2}}
+
+        nfo.generate_nfo(op, language="zh-CN", dry_run=False,
+                         dateadded="2026-07-01 12:00:00",
+                         show_detail=show_detail, fetch_season_detail=fake_season,
+                         probe_stream=fake_probe, video_path=str(video))
+        content = open(str(tmp_path / "e.nfo"), encoding="utf-8").read()
+        assert "<episodedetails>" in content
+        assert "<showtitle>莉可丽丝</showtitle>" in content
+        assert "<codec>h264</codec>" in content
+
+    def test_generate_episode_bangumi_fill(self, tmp_path):
+        """episode TMDB overview 空 + bangumi desc 补"""
+        op = NfoOperation(type="episode", path=str(tmp_path / "e.nfo"), season=1, episode=1,
+                          source=NfoSource(provider="tmdb", tmdb_id=154494, season=1, episode=1,
+                                           bangumi_subject_id=364450, bangumi_episode_id=111))
+        show_detail = {"id": 154494, "name": "莉可丽丝", "overview": "x" * 50,
+                       "episode_run_time": [24], "aggregate_credits": {"cast": []},
+                       "external_ids": {}, "keywords": {"results": []},
+                       "content_ratings": {"results": []}, "created_by": [],
+                       "genres": [], "networks": [], "poster_path": None,
+                       "backdrop_path": None, "first_air_date": "2022-07-02",
+                       "last_air_date": None, "in_production": False, "vote_average": 0}
+
+        def fake_season(tid, sn, language="zh-CN"):
+            return {"season_number": 1, "episodes": [
+                {"episode_number": 1, "name": "e1", "overview": "", "season_number": 1,
+                 "runtime": None, "air_date": None, "still_path": None,
+                 "vote_average": 0, "guest_stars": [], "crew": []}]}
+
+        def fake_bg_eps(sid, ep_type=0):
+            from melodyi_filebot.models import BangumiEpisodeBrief
+            return [BangumiEpisodeBrief(episode_id=111, name="e1", name_cn="慢慢来",
+                                        sort=1, ep=1, desc="bangumi 集简介。" * 10,
+                                        airdate="2022-07-02", duration="00:24:00")]
+
+        nfo.generate_nfo(op, language="zh-CN", dry_run=False,
+                         show_detail=show_detail, fetch_season_detail=fake_season,
+                         fetch_bangumi_episodes=fake_bg_eps)
+        content = open(str(tmp_path / "e.nfo"), encoding="utf-8").read()
+        assert "bangumi 集简介" in content
+        assert "<runtime>24</runtime>" in content  # TMDB runtime None → bangumi duration 转分钟
+
+    def test_dry_run_does_not_write(self, tmp_path):
+        op = NfoOperation(type="tvshow", path=str(tmp_path / "tvshow.nfo"),
+                          source=NfoSource(provider="tmdb", tmdb_id=1))
+        nfo.generate_nfo(op, language="zh-CN", dry_run=True,
+                         fetch_show_detail=lambda tid, language="zh-CN": {
+                             "id": 1, "name": "x", "overview": "x" * 50,
+                             "episode_run_time": [24], "genres": [], "networks": [],
+                             "external_ids": {}, "aggregate_credits": {"cast": []},
+                             "keywords": {"results": []}, "content_ratings": {"results": []},
+                             "created_by": [], "poster_path": None, "backdrop_path": None,
+                             "first_air_date": "2020-01-01", "last_air_date": None,
+                             "in_production": False, "vote_average": 0})
+        assert not (tmp_path / "tvshow.nfo").exists()
