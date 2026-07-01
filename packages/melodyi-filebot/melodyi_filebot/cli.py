@@ -17,7 +17,7 @@ import sys
 import click
 import httpx
 
-from melodyi_filebot import __version__, config, tmdb, bangumi
+from melodyi_filebot import __version__, config, tmdb, bangumi, nfo
 from melodyi_filebot.structure import analyze_path, render_text
 from melodyi_filebot.planner import (
     build_plan_tv, build_plan_movie,
@@ -159,59 +159,6 @@ def analyze(path, as_json, out):
     click.echo(text)
     if out:
         pathlib.Path(out).write_text(text, encoding="utf-8")
-
-
-@cli.command(name="build-plan")
-@click.option("--show-id", type=int, required=False, help="TMDB 剧 ID（自动模式）")
-@click.option("--movie-id", type=int, required=False, help="TMDB 电影 ID（自动模式）")
-@click.option("--source", required=False, help="源目录（自动模式，扫描后按文件名解析）")
-@click.option("--dest", required=True, help="目标根目录")
-@click.option("--language", "-l", default="zh-CN")
-@click.option("--season", type=int, default=None, help="季提示（自动模式）：文件名未带季标记时按此季号归类。文件名有显式季标记仍以文件名为准")
-@click.option("--map", "map_path", type=click.Path(exists=True), default=None, help="显式映射文件（override 模式）：按映射构建，不解析文件名。与 --source/--show-id/--movie-id 互斥")
-@click.option("--out", type=click.Path(), default=None, help="计划输出文件路径")
-def build_plan(show_id, movie_id, source, dest, language, season, map_path, out):
-    """构建重命名与目录整理计划
-
-    两种模式：
-    - 自动：--show-id/--movie-id + --source，按文件名解析季/集（可用 --season 提示季号）
-    - override：--map <映射文件>，按显式映射构建（不解析文件名），映射可由 draft-map 生成初版后编辑
-    """
-    logger.info("build-plan: map=%s show_id=%s movie_id=%s source=%s", map_path, show_id, movie_id, source)
-
-    if map_path:
-        # override 模式：显式映射，禁止与自动模式参数混用
-        if source or show_id or movie_id or season is not None:
-            raise click.UsageError("--map 与 --source/--show-id/--movie-id/--season 互斥")
-        plan_map = PlanMap.model_validate_json(
-            pathlib.Path(map_path).read_text(encoding="utf-8")
-        )
-        if plan_map.media_type == "tv":
-            show = tmdb.get_show_summary(plan_map.tmdb_id, language=plan_map.language or language)
-            result = build_plan_tv_from_map(plan_map, show, dest)
-        else:
-            movie = tmdb.get_movie_summary(plan_map.tmdb_id, language=plan_map.language or language)
-            result = build_plan_movie_from_map(plan_map, movie, dest)
-    else:
-        # 自动模式
-        if not source:
-            raise click.UsageError("自动模式需要 --source（或使用 --map 进入 override 模式）")
-        if bool(show_id) == bool(movie_id):
-            raise click.UsageError("必须且只能指定 --show-id 或 --movie-id 之一")
-        if season is not None and not show_id:
-            raise click.UsageError("--season 仅适用于剧集（--show-id）")
-        files = fsops.scan_video_files(source)
-        if show_id:
-            show = tmdb.get_show_summary(show_id, language=language)
-            result = build_plan_tv(files, show, dest, language=language, season_hint=season)
-        else:
-            movie = tmdb.get_movie_summary(movie_id, language=language)
-            result = build_plan_movie(files, movie, dest)
-
-    output = result.model_dump()
-    click.echo(json.dumps(output, ensure_ascii=False, indent=2))
-    if out:
-            pathlib.Path(out).write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 @cli.command(name="draft-map")
@@ -400,6 +347,66 @@ def episode_group(group_id, language, as_json):
             ep_label = f"S{e.season_number:02d}E{e.episode_number:02d}" if e.season_number is not None else f"E{e.episode_number:02d}"
             runtime = str(e.runtime) if e.runtime is not None else "无数据"
             click.echo(f"{ep_label} | {e.name} | {e.air_date or '无'} | {runtime} | {e.overview_length}")
+
+
+@cli.command(name="draft-plan")
+@click.option("--folder-spec", "spec_path", required=True, type=click.Path(exists=True),
+              help="folder→target 输入 JSON（show + folders）")
+@click.option("--language", "-l", default="zh-CN")
+@click.option("--out", required=True, type=click.Path(), help="Plan 输出路径")
+def draft_plan(spec_path, language, out):
+    """folder→target 清单 → Plan（调 API 解析来源）"""
+    spec = json.loads(pathlib.Path(spec_path).read_text(encoding="utf-8"))
+    logger.info("draft-plan: tmdb_id=%s", spec.get("show", {}).get("tmdb_id"))
+    try:
+        from melodyi_filebot.planner import draft_plan as _draft
+        plan = _draft(spec, language=language)
+    except Exception as e:
+        _report_error(e)
+    pathlib.Path(out).write_text(plan.model_dump_json(indent=2, ensure_ascii=False), encoding="utf-8")
+    click.echo(f"Plan 已写入: {out}（集数 {len(plan.episodes)}，告警 {len(plan.warnings)}）")
+    for w in plan.warnings:
+        click.echo(f"[告警] {w}")
+
+
+@cli.command(name="build-plan")
+@click.option("--plan", "plan_path", required=True, type=click.Path(exists=True),
+              help="Plan JSON 路径（draft-plan 产出）")
+@click.option("--dest", required=True, help="目标根目录")
+@click.option("--with-nfo", is_flag=True, help="生成 nfo 操作")
+@click.option("--out", type=click.Path(), default=None, help="执行清单输出路径")
+def build_plan(plan_path, dest, with_nfo, out):
+    """Plan → 执行清单（move + nfo 操作）"""
+    from melodyi_filebot.models import Plan
+    from melodyi_filebot.planner import build_plan_from_plan
+    plan = Plan.model_validate_json(pathlib.Path(plan_path).read_text(encoding="utf-8"))
+    result = build_plan_from_plan(plan, dest, with_nfo=with_nfo)
+    output = result.model_dump(mode="json")
+    text = json.dumps(output, ensure_ascii=False, indent=2)
+    click.echo(text)
+    if out:
+        pathlib.Path(out).write_text(text, encoding="utf-8")
+
+
+@cli.command(name="generate-nfo")
+@click.option("--plan", "plan_path", required=True, type=click.Path(exists=True),
+              help="执行清单 JSON 路径（build-plan --with-nfo 产出）")
+@click.option("--execute", is_flag=True, help="真正写盘（默认 dry-run）")
+@click.option("--language", "-l", default="zh-CN")
+def generate_nfo(plan_path, execute, language):
+    """按执行清单的 nfo 操作拉取写 NFO（默认 dry-run）"""
+    from melodyi_filebot.models import BuildPlanResult
+    data = json.loads(pathlib.Path(plan_path).read_text(encoding="utf-8"))
+    result = BuildPlanResult(**data)
+    if not result.nfo_operations:
+        click.echo("执行清单无 nfo 操作。")
+        return
+    for op in result.nfo_operations:
+        try:
+            path = nfo.generate_nfo(op, language=language, dry_run=not execute)
+            click.echo(f"[{'写' if execute else 'dry-run'}] {op.type}: {path}")
+        except Exception as e:
+            click.echo(f"错误: {e}", err=True)
 
 
 if __name__ == "__main__":

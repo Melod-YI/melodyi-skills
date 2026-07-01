@@ -681,3 +681,78 @@ class TestCliEpisodeGroup:
         data = json.loads(result.output)
         assert data["id"] == "g1"
         assert data["sub_groups"][0]["episodes"][0]["season_number"] == 1
+
+
+class TestCliNfoWorkflow:
+    """draft-plan / build-plan / generate-nfo CLI 测试"""
+
+    def _folder_spec(self, tmp_path):
+        (tmp_path / "E01.mkv").write_bytes(b"x")
+        return {"show": {"tmdb_id": 154494, "bangumi_subject_id": 364450},
+                "folders": [{"path": str(tmp_path), "target": {"kind": "season", "season": 1}}]}
+
+    def test_draft_plan_command(self, tmp_path):
+        import json
+        from melodyi_filebot.models import ShowSummary, SeasonSummary, EpisodeBrief
+        spec_path = tmp_path / "spec.json"
+        spec_path.write_text(json.dumps(self._folder_spec(tmp_path)), encoding="utf-8")
+        out_path = str(tmp_path / "plan.json")
+        with patch("melodyi_filebot.cli.tmdb.get_show_summary",
+                   return_value=ShowSummary(tmdb_id=154494, title="莉可丽丝",
+                       original_title="リコリス", year=2022, total_seasons=1,
+                       total_episodes=1, seasons=[SeasonSummary(season_number=1, name="S1", episode_count=1)])), \
+             patch("melodyi_filebot.cli.tmdb.get_season_episodes",
+                   return_value=[EpisodeBrief(episode_number=1, name="e1", overview_length=50)]), \
+             patch("melodyi_filebot.cli.bangumi.get_subject_episodes", return_value=[]):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["draft-plan", "--folder-spec", str(spec_path), "--out", out_path])
+        assert result.exit_code == 0, result.output
+        plan = json.loads(open(out_path, encoding="utf-8").read())
+        assert plan["show"]["tmdb_id"] == 154494
+        assert len(plan["episodes"]) == 1
+
+    def test_build_plan_from_plan_command(self, tmp_path):
+        import json
+        from melodyi_filebot.models import Plan, ShowRef, SeasonEntry, EpisodeEntry, FileTarget, NfoSource
+        src = tmp_path / "src"; src.mkdir()
+        (src / "E01.mkv").write_bytes(b"x")
+        plan = Plan(
+            show=ShowRef(tmdb_id=154494, title="莉可丽丝", year=2022, language="zh-CN"),
+            seasons=[SeasonEntry(season=1, source=NfoSource(provider="tmdb", tmdb_id=154494, season=1))],
+            episodes=[EpisodeEntry(file=str(src / "E01.mkv"),
+                target=FileTarget(season=1, episode=1),
+                source=NfoSource(provider="tmdb", tmdb_id=154494, season=1, episode=1))],
+            warnings=[])
+        plan_path = tmp_path / "plan.json"
+        plan_path.write_text(plan.model_dump_json(), encoding="utf-8")
+        out_path = str(tmp_path / "exec.json")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["build-plan", "--plan", str(plan_path),
+                                     "--dest", str(tmp_path / "dest"), "--with-nfo", "--out", out_path])
+        assert result.exit_code == 0, result.output
+        exec_data = json.loads(open(out_path, encoding="utf-8").read())
+        assert any(o["type"] == "move" for o in exec_data["operations"])
+        assert any(o["type"] == "tvshow" for o in exec_data["nfo_operations"])
+
+    def test_generate_nfo_dry_run(self, tmp_path):
+        import json
+        from melodyi_filebot.models import BuildPlanResult, NfoOperation, NfoSource
+        exec_data = BuildPlanResult(
+            operations=[],
+            nfo_operations=[NfoOperation(type="tvshow", path=str(tmp_path / "tvshow.nfo"),
+                source=NfoSource(provider="tmdb", tmdb_id=154494))])
+        exec_path = tmp_path / "exec.json"
+        exec_path.write_text(exec_data.model_dump_json(), encoding="utf-8")
+        with patch("melodyi_filebot.cli.tmdb.get_show_detail_full",
+                   return_value={"id": 154494, "name": "莉可丽丝", "overview": "x"*50,
+                                 "episode_run_time": [24], "genres": [], "networks": [],
+                                 "external_ids": {}, "aggregate_credits": {"cast": []},
+                                 "keywords": {"results": []}, "content_ratings": {"results": []},
+                                 "created_by": [], "poster_path": None, "backdrop_path": None,
+                                 "first_air_date": "2022-07-02", "last_air_date": None,
+                                 "in_production": False, "vote_average": 0}):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["generate-nfo", "--plan", str(exec_path)])
+        assert result.exit_code == 0, result.output
+        assert "tvshow.nfo" in result.output
+        assert not (tmp_path / "tvshow.nfo").exists()  # dry-run 不写
