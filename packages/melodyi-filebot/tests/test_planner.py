@@ -237,6 +237,15 @@ class TestBuildPlanFromPlan:
         ep_nfo = next(o for o in result.nfo_operations if o.type == "episode")
         assert ep_nfo.path == move.path.rsplit(".", 1)[0] + ".nfo"
 
+    def test_episode_nfo_has_video_path(self, tmp_path):
+        """集 nfo 操作带 video_path（供 ffprobe streamdetails）"""
+        from melodyi_filebot import planner
+        plan = self._plan(tmp_path)
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=True)
+        ep_nfo = next(o for o in result.nfo_operations if o.type == "episode")
+        assert ep_nfo.video_path is not None
+        assert ep_nfo.video_path.endswith("E01.mkv")
+
     def test_spec_applied_is_plan(self, tmp_path):
         from melodyi_filebot import planner
         plan = self._plan(tmp_path)

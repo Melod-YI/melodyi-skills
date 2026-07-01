@@ -1,6 +1,6 @@
 ---
 name: melodyi-filebot
-description: 用于电影、剧集、动画番剧的批量重命名与目录整理，输出符合 Jellyfin 规范的结构。当用户需要整理影视文件、重命名剧集、为 Jellyfin 准备媒体库时使用。
+description: 用于剧集、动画番剧的批量重命名、目录整理与 NFO 生成，输出符合 Jellyfin 规范的结构。当用户需要整理影视文件、重命名剧集、为 Jellyfin 准备媒体库时使用。
 ---
 
 # melodyi-filebot

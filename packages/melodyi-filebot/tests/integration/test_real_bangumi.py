@@ -41,7 +41,7 @@ class TestSearchAnime:
     """真实搜索测试（容忍多余条目）"""
 
     def test_search_finds_lycoris(self):
-        cands = bangumi.search_anime("莉可丽丝", perpage=10)
+        cands = bangumi.search_anime("莉可丽丝")
         entry = next((c for c in cands if c.subject_id == LYCORIS_ID), None)
         assert entry is not None, f"未找到 subject_id={LYCORIS_ID}"
         assert entry.name_cn == "莉可丽丝"

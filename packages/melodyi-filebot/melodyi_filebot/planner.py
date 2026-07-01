@@ -340,7 +340,7 @@ def build_plan_from_plan(plan: "Plan", dest_root: str, with_nfo: bool = True) ->
             ep_nfo_path = target.rsplit(".", 1)[0] + ".nfo"
             nfo_operations.append(NfoOperation(
                 type="episode", path=ep_nfo_path, season=season, episode=m.target.episode,
-                source=m.source))
+                source=m.source, video_path=os.path.normpath(m.file)))
     if with_nfo:
         # tvshow nfo
         show_source = NfoSource(provider="tmdb", tmdb_id=plan.show.tmdb_id,

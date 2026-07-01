@@ -260,6 +260,7 @@ class NfoOperation(BaseModel):
     season: Optional[int] = None
     episode: Optional[int] = None
     source: NfoSource
+    video_path: Optional[str] = None  # 集操作对应的源视频路径（ffprobe streamdetails 用）
 
 
 TreeNode.model_rebuild()

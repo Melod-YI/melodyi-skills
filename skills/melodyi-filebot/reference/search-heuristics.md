@@ -66,16 +66,16 @@
 
 季/集归属判断（"这批文件属于哪一季、每集对应哪一集"）有较大随机性，不靠规则硬编码。原则：
 
-### 可交给 CLI 自动处理（build-plan 自动模式）
+### 可交给 CLI 自动处理（draft-plan 默认行为）
 
 满足以下条件之一，可按文件名解析：
 
 - 文件名含可解析的季/集标记：`S01E01`、`S01E01-E02`（范围）、`S01E01-part-1`（分段）、`[01]`（方括号集号）、`E01`
-- 且季号要么在文件名中，要么能用 `--season N` 明确给定（如源目录是某一季但文件名无 S 标记）
+- 且季号要么在文件名中，要么能在 folder-spec 的 `target.season` 中明确给定（如源目录是某一季但文件名无 S 标记）
 
-### 需要 override（draft-map → 编辑 → build-plan --map）
+### 需要 override（draft-plan → 编辑 Plan → build-plan --plan）
 
-出现以下任一情况，自动解析不可靠或会错，应走 override：
+出现以下任一情况，自动解析不可靠或会错，应走 override（即 agent 编辑 Plan）：
 
 - **季归属不确定**：文件名无季标记，且无法确定是第几季（如 `[01]..[12]` 不知是 S1 还是 S2）
 - **集号歧义**：`[01-06]` 可能是 S00 特别篇也可能是 S01 正篇
@@ -86,24 +86,26 @@
 
 ### override 工作流
 
-1. `melodyi-filebot draft-map --show-id <id> --source <目录> [--season N] --out map.json`
-   生成映射初版（含无法解析项，season/episode 为 null）。不调 TMDB，轻量。
-2. agent 用 `fetch-summary <id>` 对照季/集结构，编辑 `map.json`：修正每项的 season/episode/episode_end/part。
-3. `melodyi-filebot build-plan --map map.json --dest <目标> --out plan.json`
-   按显式映射构建计划（`spec_applied="override"`，不解析文件名）。
+1. `melodyi-filebot draft-plan --folder-spec spec.json --out plan.json`
+   按 folder→target 清单调 TMDB/Bangumi 解析来源，生成 Plan 初版（含无法解析项的告警）。
+2. agent 用 `fetch-summary <id>` 对照季/集结构，编辑 `plan.json`：直接修改 `episodes[].target.season/episode/episode_end/part`，必要时增删 `episodes[]` 与 `seasons[]` 条目。
+3. `melodyi-filebot build-plan --plan plan.json --dest <目标> --with-nfo --out build.json`
+   按编辑后的 Plan 构建执行清单（`spec_applied="plan"`）。
 4. `execute-plan` dry-run 校验 → `--execute` 执行。
 
-### 映射格式
+### Plan 结构（agent 编辑对象）
 
 ```json
 {
-  "media_type": "tv",
-  "tmdb_id": 46260,
-  "language": "zh-CN",
-  "mappings": [
-    {"file": "/abs/path/file.mkv", "season": 2, "episode": 1, "episode_end": null, "part": null}
-  ]
+  "show": {"tmdb_id": 46260, "language": "zh-CN"},
+  "seasons": [{"season": 1, "source": {"provider": "tmdb", "tmdb_id": 46260, "season": 1}}],
+  "episodes": [
+    {"file": "/abs/path/file.mkv",
+     "target": {"season": 1, "episode": 1, "episode_end": null, "part": null},
+     "source": {"provider": "tmdb", "tmdb_id": 46260, "season": 1, "episode": 1}}
+  ],
+  "warnings": []
 }
 ```
 
-电影映射 `media_type="movie"`，每项只需 `file`（第一项为正片）。
+季来源由 `seasons[].source` 指定，集来源由 `episodes[].source` 指定（TMDB 缺季时可切 `provider="bangumi"`）。

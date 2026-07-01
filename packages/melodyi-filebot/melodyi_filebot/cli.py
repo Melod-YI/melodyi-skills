@@ -373,7 +373,8 @@ def generate_nfo(plan_path, execute, language):
     failures = 0
     for op in result.nfo_operations:
         try:
-            path = nfo.generate_nfo(op, language=language, dry_run=not execute)
+            path = nfo.generate_nfo(op, language=language, dry_run=not execute,
+                                    video_path=op.video_path)
             click.echo(f"[{'写' if execute else 'dry-run'}] {op.type}: {path}")
         except Exception as e:
             click.echo(f"错误: {e}", err=True)
