@@ -168,32 +168,6 @@ class BuildPlanResult(BaseModel):
     warnings: List[str] = Field(default_factory=list)
 
 
-class FileMapping(BaseModel):
-    """单个文件到 TMDB 条目（季/集）的显式映射
-
-    用于 override：agent/用户显式指定每个文件对应哪一季哪一集，
-    而非依赖文件名自动解析。
-    """
-
-    file: str
-    season: Optional[int] = None
-    episode: Optional[int] = None
-    episode_end: Optional[int] = None  # 多集范围终点（一文件对应多集）
-    part: Optional[int] = None  # 分段编号
-
-
-class PlanMap(BaseModel):
-    """文件→TMDB 条目的显式映射（override 用）
-
-    由 draft-map 生成初版，agent/用户编辑后交给 build-plan --map 执行。
-    """
-
-    media_type: str  # "tv" | "movie"
-    tmdb_id: int
-    language: str = "zh-CN"
-    mappings: List[FileMapping] = Field(default_factory=list)
-
-
 class TreeNode(BaseModel):
     """路径分析树节点
 

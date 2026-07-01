@@ -1,7 +1,7 @@
 """CLI 命令行入口
 
-子命令：search / fetch-summary / build-plan / execute-plan / undo
-        bangumi-search / bangumi-subject / bangumi-episodes
+子命令：search / fetch-summary / draft-plan / build-plan / execute-plan / generate-nfo / undo
+        bangumi-search / bangumi-subject / bangumi-episodes / episode-group
 
 日志风格参考 melodyi-web：默认静默（仅 ERROR），加 --verbose/-v 才输出 INFO 日志；
 网络/API错误用 click.echo(err=True) + sys.exit(1) 友好报错，非 traceback。
@@ -19,13 +19,7 @@ import httpx
 
 from melodyi_filebot import __version__, config, tmdb, bangumi, nfo
 from melodyi_filebot.structure import analyze_path, render_text
-from melodyi_filebot.planner import (
-    build_plan_tv, build_plan_movie,
-    build_plan_tv_from_map, build_plan_movie_from_map,
-    draft_map_tv,
-)
 from melodyi_filebot import fsops
-from melodyi_filebot.models import PlanMap
 
 logger = logging.getLogger(__name__)
 
@@ -159,39 +153,6 @@ def analyze(path, as_json, out):
     click.echo(text)
     if out:
         pathlib.Path(out).write_text(text, encoding="utf-8")
-
-
-@cli.command(name="draft-map")
-@click.option("--show-id", type=int, required=False, help="TMDB 剧 ID")
-@click.option("--movie-id", type=int, required=False, help="TMDB 电影 ID")
-@click.option("--source", required=True, help="源目录")
-@click.option("--language", "-l", default="zh-CN")
-@click.option("--season", type=int, default=None, help="季提示：文件名未带季标记时填入此季号（仅剧集）")
-@click.option("--out", required=True, type=click.Path(), help="映射输出文件路径")
-def draft_map(show_id, movie_id, source, language, season, out):
-    """生成文件→季/集 映射初版（供编辑后交给 build-plan --map）
-
-    扫描+解析文件名，输出猜测映射。不调用 TMDB，仅透传 tmdb_id。
-    无法解析的文件 season/episode 为 None，由 agent 对照 fetch-summary 后补全。
-    """
-    logger.info("draft-map: show_id=%s movie_id=%s source=%s", show_id, movie_id, source)
-    if bool(show_id) == bool(movie_id):
-        raise click.UsageError("必须且只能指定 --show-id 或 --movie-id 之一")
-    if season is not None and not show_id:
-        raise click.UsageError("--season 仅适用于剧集（--show-id）")
-    files = fsops.scan_video_files(source)
-    if show_id:
-        plan_map = draft_map_tv(files, tmdb_id=show_id, season_hint=season, language=language)
-    else:
-        from melodyi_filebot.models import FileMapping, PlanMap as _PM
-        plan_map = _PM(
-            media_type="movie", tmdb_id=movie_id, language=language,
-            mappings=[FileMapping(file=f) for f in files],
-        )
-    output = plan_map.model_dump_json(indent=2, ensure_ascii=False)
-    pathlib.Path(out).write_text(output, encoding="utf-8")
-    click.echo(f"映射初版已写入: {out}（共 {len(plan_map.mappings)} 项）")
-    click.echo("编辑后执行: melodyi-filebot build-plan --map " + out + " --dest <目标根目录>")
 
 
 @cli.command(name="execute-plan")

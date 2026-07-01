@@ -108,8 +108,7 @@ class TestCompanionExecuteAndUndo:
     """伴生文件执行与回滚集成测试"""
 
     def _plan(self, tmp_path):
-        from melodyi_filebot.planner import build_plan_tv
-        from melodyi_filebot.models import ShowSummary, SeasonSummary
+        from melodyi_filebot.models import BuildPlanResult, PlanOperation
         src = tmp_path / "src"
         src.mkdir()
         v = src / "Show S01E01.mkv"
@@ -118,12 +117,21 @@ class TestCompanionExecuteAndUndo:
         v.write_bytes(b"v")
         sub.write_text("s")
         tc.write_text("t")
-        show = ShowSummary(
-            tmdb_id=1, title="Show", original_title="x", year=2020,
-            total_seasons=1, total_episodes=1,
-            seasons=[SeasonSummary(season_number=1, name="S1", episode_count=1)],
-        )
-        return build_plan_tv(files=[str(v)], show=show, dest_root=str(tmp_path / "dest")), sub, tc
+        show_dir = tmp_path / "dest" / "Show (2020) [tmdbid-1]"
+        season_dir = show_dir / "Season 01"
+        # 与旧 build_plan_tv 产出的操作等价：mkdir 剧 + mkdir 季 + move 视频 + 伴生 move
+        return BuildPlanResult(
+            operations=[
+                PlanOperation(type="mkdir", path=str(show_dir)),
+                PlanOperation(type="mkdir", path=str(season_dir)),
+                PlanOperation(type="move", source=str(v),
+                              path=str(season_dir / "Show (2020) S01E01.mkv")),
+                PlanOperation(type="move", source=str(sub),
+                              path=str(season_dir / "Show (2020) S01E01.ass")),
+                PlanOperation(type="move", source=str(tc),
+                              path=str(season_dir / "Show (2020) S01E01.TC.ass")),
+            ]
+        ), sub, tc
 
     def test_execute_moves_companions(self, tmp_path):
         plan, sub, tc = self._plan(tmp_path)
