@@ -113,3 +113,77 @@ class TestSeasonXml:
                                    show_actors=actors, season_number=1, tmdb_id=1)
         assert "<actor>" in xml and "内山夕实" in xml
         assert "<role>鲁迪</role>" in xml  # 从 roles[0].character 读
+
+
+def _episode_data():
+    return {
+        "name": "慢慢来", "overview": "x" * 50, "air_date": "2022-07-02",
+        "runtime": 24, "episode_number": 1, "season_number": 1,
+        "still_path": "/still.jpg", "vote_average": 8.4,
+        "guest_stars": [{"name": "竹田海渡", "character": "急救员", "order": 504, "profile_path": "/g.jpg"}],
+        "crew": [{"name": "平野宏树", "job": "Director"}, {"name": "岡本学", "job": "Writer"}],
+    }
+
+
+def _stream_details():
+    return {
+        "video": {"codec": "h264", "width": 1920, "height": 1080, "aspect": "16:9",
+                  "framerate": "23.976", "duration": 23, "duration_seconds": 1420},
+        "audio": {"codec": "aac", "channels": 2, "samplingrate": 48000},
+    }
+
+
+class TestEpisodeXml:
+    def test_episode_xml(self):
+        xml = nfo.build_episode_xml(
+            _episode_data(), bangumi_data=None, show_title="莉可丽丝",
+            target_season=1, target_episode=1, stream_details=_stream_details(),
+            tmdb_id=154494, dateadded="2026-07-01 12:00:00",
+        )
+        assert "<episodedetails>" in xml and "</episodedetails>" in xml
+        assert "<title>慢慢来</title>" in xml
+        assert "<showtitle>莉可丽丝</showtitle>" in xml
+        assert "<season>1</season>" in xml and "<episode>1</episode>" in xml
+        assert "<aired>2022-07-02</aired>" in xml
+        assert "<runtime>24</runtime>" in xml
+        assert "<director>平野宏树</director>" in xml
+        assert "<writer>岡本学</writer>" in xml
+        assert "<lockdata>true</lockdata>" in xml
+        assert "<dateadded>2026-07-01 12:00:00</dateadded>" in xml
+        assert "竹田海渡" in xml
+        assert "<role>急救员</role>" in xml  # guest_stars character 顶层
+        assert "<type>GuestStar</type>" in xml
+        assert "<codec>h264</codec>" in xml
+        assert "<width>1920</width>" in xml
+        assert "<durationinseconds>1420</durationinseconds>" in xml
+        assert "image.tmdb.org/t/p/original/still.jpg" in xml
+        assert '<uniqueid type="tmdbid" default="true">154494-1-1</uniqueid>' in xml
+
+    def test_episode_xml_displayseason_when_target_ne_source(self):
+        """target(S01E05) ≠ source(S00E12) 时写 displayseason/displayepisode"""
+        ep = dict(_episode_data(), season_number=0, episode_number=12)
+        xml = nfo.build_episode_xml(
+            ep, bangumi_data=None, show_title="物语",
+            target_season=1, target_episode=5, stream_details=None,
+        )
+        assert "<displayseason>0</displayseason>" in xml
+        assert "<displayepisode>12</displayepisode>" in xml
+        assert "<season>1</season>" in xml  # 展示用 target
+        assert "<episode>5</episode>" in xml
+
+    def test_episode_xml_bangumi_desc_fill(self):
+        ep = dict(_episode_data(), overview="")
+        bg = {"id": 1111258, "desc": "bangumi 集简介。" * 10, "name_cn": "慢慢来", "airdate": "2022-07-02"}
+        xml = nfo.build_episode_xml(
+            ep, bangumi_data=bg, show_title="莉可丽丝",
+            target_season=1, target_episode=1, stream_details=None,
+        )
+        assert "bangumi 集简介" in xml
+        assert '<uniqueid type="bgm">1111258</uniqueid>' in xml  # bangumi episode id
+
+    def test_episode_xml_no_streamdetails_when_none(self):
+        xml = nfo.build_episode_xml(
+            _episode_data(), bangumi_data=None, show_title="x",
+            target_season=1, target_episode=1, stream_details=None,
+        )
+        assert "<fileinfo>" not in xml

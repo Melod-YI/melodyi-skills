@@ -151,3 +151,88 @@ def build_season_xml(season: dict, bangumi_data: Optional[dict],
     parts.append(_el("seasonnumber", season_number))
     parts.append("</season>")
     return "\n".join(parts)
+
+
+def _streamdetails_xml(sd: dict) -> str:
+    v = sd.get("video") or {}
+    a = sd.get("audio") or {}
+    parts = ["<fileinfo><streamdetails>"]
+    if v:
+        parts.append("<video>")
+        for tag in ["codec", "width", "height", "aspect", "framerate", "duration", "duration_seconds"]:
+            if v.get(tag) is not None:
+                # duration_seconds → durationinseconds 标签名
+                el_tag = "durationinseconds" if tag == "duration_seconds" else tag
+                parts.append(_el(el_tag, v.get(tag)))
+        parts.append("</video>")
+    if a:
+        parts.append("<audio>")
+        for tag in ["codec", "channels", "samplingrate"]:
+            if a.get(tag) is not None:
+                parts.append(_el(tag, a.get(tag)))
+        parts.append("</audio>")
+    parts.append("</streamdetails></fileinfo>")
+    return "\n".join(parts)
+
+
+def build_episode_xml(ep: dict, bangumi_data: Optional[dict], show_title: str,
+                      target_season: int, target_episode: int,
+                      stream_details: Optional[dict],
+                      tmdb_id: Optional[int] = None,
+                      dateadded: Optional[str] = None) -> str:
+    """集详情 + 可选 bangumi + 展示身份 + ffprobe → episodedetails XML"""
+    bg = bangumi_data or {}
+    plot = _fill_overview(ep.get("overview"), bg.get("desc"))
+    title = ep.get("name") or bg.get("name_cn") or ""
+    src_season = ep.get("season_number")
+    src_episode = ep.get("episode_number")
+    parts = ['<?xml version="1.0" encoding="utf-8" standalone="yes"?>', "<episodedetails>"]
+    parts.append(_el("plot", plot))
+    parts.append("<lockdata>true</lockdata>")
+    if dateadded:
+        parts.append(_el("dateadded", dateadded))
+    parts.append(_el("title", title))
+    for c in (ep.get("crew") or []):
+        if c.get("job") == "Director":
+            parts.append(_el("director", c.get("name")))
+            parts.append(_el("credits", c.get("name")))
+        elif c.get("job") == "Writer":
+            parts.append(_el("writer", c.get("name")))
+            parts.append(_el("credits", c.get("name")))
+    parts.append(_el("rating", ep.get("vote_average")))
+    air = ep.get("air_date") or bg.get("airdate")
+    parts.append(_el("year", (air or "")[:4] or None))
+    parts.append(_el("runtime", ep.get("runtime")))
+    parts.append(_el("showtitle", show_title))
+    parts.append(_el("episode", target_episode))
+    parts.append(_el("season", target_season))
+    parts.append(_el("aired", air))
+    # 特别篇重排：target≠source 时写 displayseason/displayepisode
+    if src_season is not None and src_episode is not None \
+            and (src_season != target_season or src_episode != target_episode):
+        parts.append(_el("displayseason", src_season))
+        parts.append(_el("displayepisode", src_episode))
+    still = _img_url(ep.get("still_path"))
+    if still:
+        parts.append("<art>")
+        parts.append(_el("poster", still))
+        parts.append("</art>")
+    # uniqueid
+    if tmdb_id is not None and src_season is not None and src_episode is not None:
+        parts.append(f'<uniqueid type="tmdbid" default="true">{tmdb_id}-{src_season}-{src_episode}</uniqueid>')
+    bg_ep_id = bg.get("id")
+    if bg_ep_id:
+        parts.append(f'<uniqueid type="bgm">{bg_ep_id}</uniqueid>')
+    # guest_stars：character 顶层（与 aggregate_credits 的 roles 嵌套不同）
+    for a in (ep.get("guest_stars") or []):
+        parts.append("<actor>")
+        parts.append(_el("name", a.get("name")))
+        parts.append(_el("role", a.get("character")))
+        parts.append(_el("type", "GuestStar"))
+        parts.append(_el("sortorder", a.get("order")))
+        parts.append(_el("thumb", _img_url(a.get("profile_path"))))
+        parts.append("</actor>")
+    if stream_details:
+        parts.append(_streamdetails_xml(stream_details))
+    parts.append("</episodedetails>")
+    return "\n".join(parts)
