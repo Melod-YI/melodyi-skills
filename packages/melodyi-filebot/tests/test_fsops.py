@@ -119,7 +119,7 @@ class TestCompanionExecuteAndUndo:
         tc.write_text("t")
         show_dir = tmp_path / "dest" / "Show (2020) [tmdbid-1]"
         season_dir = show_dir / "Season 01"
-        # 与旧 build_plan_tv 产出的操作等价：mkdir 剧 + mkdir 季 + move 视频 + 伴生 move
+        # 与 build_plan_from_plan 产出的操作等价：mkdir 剧 + mkdir 季 + move 视频 + 伴生 move
         return BuildPlanResult(
             operations=[
                 PlanOperation(type="mkdir", path=str(show_dir)),

@@ -338,15 +338,19 @@ def draft_plan(spec_path, language, out):
 @click.option("--out", type=click.Path(), default=None, help="执行清单输出路径")
 def build_plan(plan_path, dest, with_nfo, out):
     """Plan → 执行清单（move + nfo 操作）"""
-    from melodyi_filebot.models import Plan
-    from melodyi_filebot.planner import build_plan_from_plan
-    plan = Plan.model_validate_json(pathlib.Path(plan_path).read_text(encoding="utf-8"))
-    result = build_plan_from_plan(plan, dest, with_nfo=with_nfo)
-    output = result.model_dump(mode="json")
-    text = json.dumps(output, ensure_ascii=False, indent=2)
-    click.echo(text)
-    if out:
-        pathlib.Path(out).write_text(text, encoding="utf-8")
+    logger.info("build-plan: plan=%s dest=%s nfo=%s", plan_path, dest, with_nfo)
+    try:
+        from melodyi_filebot.models import Plan
+        from melodyi_filebot.planner import build_plan_from_plan
+        plan = Plan.model_validate_json(pathlib.Path(plan_path).read_text(encoding="utf-8"))
+        result = build_plan_from_plan(plan, dest, with_nfo=with_nfo)
+        output = result.model_dump(mode="json")
+        text = json.dumps(output, ensure_ascii=False, indent=2)
+        click.echo(text)
+        if out:
+            pathlib.Path(out).write_text(text, encoding="utf-8")
+    except Exception as e:
+        _report_error(e)
 
 
 @cli.command(name="generate-nfo")
@@ -356,18 +360,27 @@ def build_plan(plan_path, dest, with_nfo, out):
 @click.option("--language", "-l", default="zh-CN")
 def generate_nfo(plan_path, execute, language):
     """按执行清单的 nfo 操作拉取写 NFO（默认 dry-run）"""
-    from melodyi_filebot.models import BuildPlanResult
-    data = json.loads(pathlib.Path(plan_path).read_text(encoding="utf-8"))
-    result = BuildPlanResult(**data)
+    logger.info("generate-nfo: plan=%s execute=%s", plan_path, execute)
+    try:
+        from melodyi_filebot.models import BuildPlanResult
+        data = json.loads(pathlib.Path(plan_path).read_text(encoding="utf-8"))
+        result = BuildPlanResult(**data)
+    except Exception as e:
+        _report_error(e)
     if not result.nfo_operations:
         click.echo("执行清单无 nfo 操作。")
         return
+    failures = 0
     for op in result.nfo_operations:
         try:
             path = nfo.generate_nfo(op, language=language, dry_run=not execute)
             click.echo(f"[{'写' if execute else 'dry-run'}] {op.type}: {path}")
         except Exception as e:
             click.echo(f"错误: {e}", err=True)
+            failures += 1
+    if failures:
+        click.echo(f"{failures} 个 nfo 操作失败。", err=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

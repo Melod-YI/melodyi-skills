@@ -600,3 +600,42 @@ class TestCliNfoWorkflow:
         assert result.exit_code == 0, result.output
         assert "tvshow.nfo" in result.output
         assert not (tmp_path / "tvshow.nfo").exists()  # dry-run 不写
+
+    def test_build_plan_invalid_json_reports_error(self, tmp_path):
+        """build-plan 收到非法 Plan JSON → 友好报错，exit!=0，无 traceback"""
+        bad = tmp_path / "bad.json"
+        bad.write_text("{not valid json", encoding="utf-8")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["build-plan", "--plan", str(bad), "--dest", str(tmp_path / "d")])
+        assert result.exit_code != 0
+        assert "Traceback" not in result.output
+
+    def test_generate_nfo_partial_failure_exits_nonzero(self, tmp_path):
+        """generate-nfo 部分 op 失败 → exit!=0"""
+        import json
+        from melodyi_filebot.models import BuildPlanResult, NfoOperation, NfoSource
+        exec_data = BuildPlanResult(
+            operations=[],
+            nfo_operations=[
+                NfoOperation(type="tvshow", path=str(tmp_path / "a.nfo"),
+                    source=NfoSource(provider="tmdb", tmdb_id=1)),
+                NfoOperation(type="tvshow", path=str(tmp_path / "b.nfo"),
+                    source=NfoSource(provider="tmdb", tmdb_id=2)),
+            ])
+        exec_path = tmp_path / "exec.json"
+        exec_path.write_text(exec_data.model_dump_json(), encoding="utf-8")
+        call_count = [0]
+        def fake_show(tid, language="zh-CN"):
+            call_count[0] += 1
+            if tid == 1:
+                return {"id": 1, "name": "A", "overview": "x"*50, "episode_run_time": [24],
+                        "genres": [], "networks": [], "external_ids": {}, "aggregate_credits": {"cast": []},
+                        "keywords": {"results": []}, "content_ratings": {"results": []}, "created_by": [],
+                        "poster_path": None, "backdrop_path": None, "first_air_date": "2020-01-01",
+                        "last_air_date": None, "in_production": False, "vote_average": 0}
+            raise RuntimeError("模拟失败")
+        with patch("melodyi_filebot.cli.tmdb.get_show_detail_full", side_effect=fake_show):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["generate-nfo", "--plan", str(exec_path), "--execute"])
+        assert result.exit_code != 0  # 部分失败 → 非 0
+        assert "1 个 nfo 操作失败" in result.output or "失败" in result.output
