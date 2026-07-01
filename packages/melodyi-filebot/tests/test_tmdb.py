@@ -199,3 +199,41 @@ class TestEpisodeGroup:
             tmdb.get_episode_group("g", language="ja-JP")
         _, kwargs = mock_eg.info.call_args
         assert kwargs.get("language") == "ja-JP"
+
+
+class TestShowDetailFull:
+    """get_show_detail_full：append 全量字段"""
+
+    def test_uses_append_to_response(self):
+        mock_tv = MagicMock()
+        mock_tv.info.return_value = {"id": 154494, "name": "莉可丽丝"}
+        with patch("melodyi_filebot.tmdb.tmdbsimple.TV", return_value=mock_tv):
+            tmdb.get_show_detail_full(154494, language="zh-CN")
+        _, kwargs = mock_tv.info.call_args
+        append = kwargs.get("append_to_response", "")
+        for part in ["external_ids", "aggregate_credits", "keywords", "content_ratings"]:
+            assert part in append, f"应 append {part}"
+
+    def test_returns_raw_dict(self):
+        mock_tv = MagicMock()
+        mock_tv.info.return_value = {"id": 154494, "name": "莉可丽丝", "overview": "x" * 50}
+        with patch("melodyi_filebot.tmdb.tmdbsimple.TV", return_value=mock_tv):
+            d = tmdb.get_show_detail_full(154494, language="zh-CN")
+        assert d["id"] == 154494
+        assert d["name"] == "莉可丽丝"
+
+
+class TestSeasonDetail:
+    """get_season_detail：含每集 crew/guest_stars"""
+
+    def test_returns_raw_dict(self):
+        mock_s = MagicMock()
+        mock_s.info.return_value = {
+            "id": 154494, "season_number": 1, "name": "S1",
+            "episodes": [{"episode_number": 1, "name": "e1", "crew": [], "guest_stars": []}],
+        }
+        with patch("melodyi_filebot.tmdb.tmdbsimple.TV_Seasons", return_value=mock_s):
+            d = tmdb.get_season_detail(154494, 1, language="zh-CN")
+        assert d["season_number"] == 1
+        assert d["episodes"][0]["name"] == "e1"
+        mock_s.info.assert_called_once()

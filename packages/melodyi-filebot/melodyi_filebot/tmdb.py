@@ -175,3 +175,30 @@ def get_episode_group(group_id: str, language: str = "zh-CN") -> EpisodeGroupDet
         group_id, result.group_count, result.episode_count,
     )
     return result
+
+
+def get_show_detail_full(tmdb_id: int, language: str = "zh-CN") -> dict:
+    """获取剧全量详情（含 external_ids/aggregate_credits/keywords/content_ratings）
+
+    一次 append 请求取齐 NFO 所需字段，返回原始 dict（不经摘要压缩，供 nfo.py 直接用）。
+    """
+    _ensure_key()
+    logger.info("获取剧全量详情开始: id=%s, lang=%s", tmdb_id, language)
+    tv = tmdbsimple.TV(id=tmdb_id)
+    detail = tv.info(
+        append_to_response="external_ids,aggregate_credits,keywords,content_ratings",
+        language=language,
+    )
+    logger.info("获取剧全量详情完成: id=%s", tmdb_id)
+    return detail
+
+
+def get_season_detail(tmdb_id: int, season_number: int, language: str = "zh-CN") -> dict:
+    """获取某季详情（含每集 crew/guest_stars/still_path），返回原始 dict"""
+    _ensure_key()
+    logger.info("获取季详情开始: id=%s season=%s", tmdb_id, season_number)
+    seasons = tmdbsimple.TV_Seasons(tv_id=tmdb_id, season_number=season_number)
+    detail = seasons.info(language=language)
+    logger.info("获取季详情完成: id=%s season=%s 集数=%d",
+                tmdb_id, season_number, len(detail.get("episodes") or []))
+    return detail
