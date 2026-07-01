@@ -112,8 +112,8 @@ async def click_find_device(page: Page) -> None:
 async def wait_for_data(
     page: Page,
     interceptor: Interceptor,
-    quiet_seconds: float = 3.0,
-    max_wait_after_first: float = 15.0,
+    quiet_seconds: float = 10.0,
+    max_wait_after_first: float = 30.0,
     first_timeout: float = 30.0,
 ) -> None:
     """
@@ -125,10 +125,12 @@ async def wait_for_data(
          连续 quiet_seconds 秒无新调用 -> 结束；
       3. 首次捕获后累计 max_wait_after_first 秒仍不静默 -> 强制结束（防止持续轮询）。
 
+    默认 quiet_seconds=10：收到首次请求后至少再等 10 秒静默，确保收集到可能的多次调用。
+
     Args:
         page: Playwright 页面
         interceptor: 已注册的拦截器，从中读取已收集的 captures
-        quiet_seconds: 静默阈值，无新调用达该时长即结束
+        quiet_seconds: 静默阈值，无新调用达该时长即结束（收到首次请求后的最少等待）
         max_wait_after_first: 首次捕获后的最长等待上限
         first_timeout: 等待首次捕获的超时
     """
