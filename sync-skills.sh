@@ -5,7 +5,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILLS_DIR="$SCRIPT_DIR/skills"
-WORKSPACE_ROOT="$SCRIPT_DIR/workspace"
+WORKSPACE_ROOT="$SCRIPT_DIR/../skill-workspace"
 
 echo "=== Skills 同步脚本 ==="
 echo "Skills 目录: $SKILLS_DIR"
