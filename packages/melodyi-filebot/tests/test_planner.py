@@ -249,3 +249,52 @@ class TestBuildPlanFromPlan:
         plan = self._plan(tmp_path)
         result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=True)
         assert result.nfo_operations[0].type == "tvshow"
+
+    def test_companion_follows_video_rename(self, tmp_path):
+        """伴生字幕随视频改名，语言 token 后缀保留"""
+        from melodyi_filebot import planner
+        from melodyi_filebot.models import (
+            Plan, ShowRef, SeasonEntry, EpisodeEntry, FileTarget, NfoSource)
+        src = tmp_path / "src"; src.mkdir()
+        video = src / "Show S01E01.mkv"; video.write_bytes(b"x")
+        sub = src / "Show S01E01.zh.ass"; sub.write_bytes(b"x")  # 伴生字幕
+        plan = Plan(
+            show=ShowRef(tmdb_id=1, title="剧", year=2022, language="zh-CN"),
+            seasons=[SeasonEntry(season=1, source=NfoSource(provider="tmdb", tmdb_id=1, season=1))],
+            episodes=[EpisodeEntry(file=str(video),
+                target=FileTarget(season=1, episode=1),
+                source=NfoSource(provider="tmdb", tmdb_id=1, season=1, episode=1))],
+            warnings=[])
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=False)
+        moves = [o for o in result.operations if o.type == "move"]
+        # 视频改名
+        video_move = next(o for o in moves if o.source.endswith(".mkv"))
+        assert "S01E01" in video_move.path and "剧 (2022)" in video_move.path
+        # 字幕伴生改名：目标名 = 改名后视频 stem + 原后缀（.zh.ass）
+        sub_move = next(o for o in moves if o.source.endswith(".ass"))
+        assert sub_move.path.endswith(".zh.ass")
+        # 字幕目标与视频同目录、同 stem 前缀
+        assert sub_move.path.startswith(str(tmp_path / "dest"))
+        sub_stem = sub_move.path.rsplit(".zh.ass", 1)[0]
+        assert sub_stem == video_move.path.rsplit(".mkv", 1)[0]
+
+    def test_companion_partial_prefix_excluded(self, tmp_path):
+        """stem 后非紧跟 '.' 的文件不算伴生（如 Show S01E01-extra.ass）"""
+        from melodyi_filebot import planner
+        from melodyi_filebot.models import (
+            Plan, ShowRef, SeasonEntry, EpisodeEntry, FileTarget, NfoSource)
+        src = tmp_path / "src"; src.mkdir()
+        video = src / "Show S01E01.mkv"; video.write_bytes(b"x")
+        non_companion = src / "Show S01E01-extra.ass"; non_companion.write_bytes(b"x")  # stem 后是 - 不是 .
+        plan = Plan(
+            show=ShowRef(tmdb_id=1, title="剧", year=2022, language="zh-CN"),
+            seasons=[SeasonEntry(season=1, source=NfoSource(provider="tmdb", tmdb_id=1, season=1))],
+            episodes=[EpisodeEntry(file=str(video),
+                target=FileTarget(season=1, episode=1),
+                source=NfoSource(provider="tmdb", tmdb_id=1, season=1, episode=1))],
+            warnings=[])
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=False)
+        moves = [o for o in result.operations if o.type == "move"]
+        # 只有视频 move，无伴生（-extra.ass 不算伴生）
+        assert len(moves) == 1
+        assert moves[0].source.endswith(".mkv")
