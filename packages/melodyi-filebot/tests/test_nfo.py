@@ -199,7 +199,6 @@ class TestEpisodeXml:
         assert "<fileinfo>" not in xml
 
 
-import os
 from melodyi_filebot.models import NfoOperation, NfoSource
 
 
@@ -293,6 +292,34 @@ class TestGenerateNfo:
         content = open(str(tmp_path / "e.nfo"), encoding="utf-8").read()
         assert "bangumi 集简介" in content
         assert "<runtime>24</runtime>" in content  # TMDB runtime None → bangumi duration 转分钟
+
+    def test_generate_season_tmdb_with_bangumi_fill(self, tmp_path):
+        """season: TMDB 主源 + bangumi 补全 → 输出 tmdbid 与 bgm uniqueid"""
+        from melodyi_filebot import nfo
+        op = NfoOperation(type="season", path=str(tmp_path / "season.nfo"), season=1,
+                          source=NfoSource(provider="tmdb", tmdb_id=154494, season=1,
+                                           bangumi_subject_id=364450))
+        show_detail = {"id": 154494, "name": "莉可丽丝", "overview": "x"*50,
+                       "episode_run_time": [24], "aggregate_credits": {"cast": []},
+                       "external_ids": {}, "keywords": {"results": []},
+                       "content_ratings": {"results": []}, "created_by": [],
+                       "genres": [], "networks": [], "poster_path": None,
+                       "backdrop_path": None, "first_air_date": "2022-07-02",
+                       "last_air_date": None, "in_production": False, "vote_average": 0}
+        def fake_season(tid, sn, language="zh-CN"):
+            return {"season_number": 1, "name": "S1", "overview": "x"*50,
+                    "air_date": "2022-07-02", "poster_path": None}
+        def fake_bg_subject(sid):
+            return {"id": 364450, "summary": "", "name_cn": ""}
+        nfo.generate_nfo(op, language="zh-CN", dry_run=False,
+                         dateadded="2026-07-01 12:00:00",
+                         show_detail=show_detail, fetch_season_detail=fake_season,
+                         fetch_bangumi_subject=fake_bg_subject)
+        content = open(str(tmp_path / "season.nfo"), encoding="utf-8").read()
+        assert "<season>" in content
+        assert '<uniqueid type="tmdbid" default="true">154494-1</uniqueid>' in content
+        assert '<uniqueid type="bgm">364450</uniqueid>' in content  # bangumi_subject_id set → emit bgm
+        assert "<dateadded>2026-07-01 12:00:00</dateadded>" in content
 
     def test_dry_run_does_not_write(self, tmp_path):
         op = NfoOperation(type="tvshow", path=str(tmp_path / "tvshow.nfo"),

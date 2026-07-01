@@ -356,7 +356,7 @@ def generate_nfo(op: NfoOperation, language: str = "zh-CN", dry_run: bool = True
         show_actors = ((show.get("aggregate_credits") or {}).get("cast")) or []
         xml = build_season_xml(season, _bg_subject_data(), show_actors, op.season,
                                tmdb_id=src.tmdb_id,
-                               bangumi_subject_id=src.bangumi_subject_id if src.provider == "bangumi" else None,
+                               bangumi_subject_id=src.bangumi_subject_id,
                                dateadded=dateadded)
     elif op.type == "episode":
         if src.provider == "tmdb" and src.tmdb_id is not None:
