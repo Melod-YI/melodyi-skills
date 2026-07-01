@@ -106,3 +106,48 @@ def build_tvshow_xml(show: dict, bangumi_data: Optional[dict], language: str,
     parts.append(_el("status", "Continuing" if show.get("in_production") else "Ended"))
     parts.append("</tvshow>")
     return "\n".join(parts)
+
+
+def build_season_xml(season: dict, bangumi_data: Optional[dict],
+                     show_actors: Optional[list], season_number: int,
+                     tmdb_id: Optional[int] = None,
+                     bangumi_subject_id: Optional[int] = None,
+                     dateadded: Optional[str] = None) -> str:
+    """季详情 + 可选 bangumi subject → season.nfo XML"""
+    bg = bangumi_data or {}
+    plot = _fill_overview(season.get("overview"), bg.get("summary"))
+    title = season.get("name") or bg.get("name_cn") or f"第 {season_number} 季"
+    parts = ['<?xml version="1.0" encoding="utf-8" standalone="yes"?>', "<season>"]
+    parts.append(_el("plot", plot))
+    parts.append(_el("outline", plot))
+    parts.append("<lockdata>true</lockdata>")
+    if dateadded:
+        parts.append(_el("dateadded", dateadded))
+    parts.append(_el("title", title))
+    air = season.get("air_date") or bg.get("date")
+    parts.append(_el("year", (air or "")[:4] or None))
+    parts.append(_el("premiered", air))
+    parts.append(_el("releasedate", air))
+    poster = _img_url(season.get("poster_path"))
+    if poster:
+        parts.append("<art>")
+        parts.append(_el("poster", poster))
+        parts.append("</art>")
+    # uniqueid：TMDB 季标识为默认，bangumi subject id 附加（type=bgm）
+    if tmdb_id is not None:
+        parts.append(f'<uniqueid type="tmdbid" default="true">{tmdb_id}-{season_number}</uniqueid>')
+    if bangumi_subject_id is not None:
+        parts.append(f'<uniqueid type="bgm">{bangumi_subject_id}</uniqueid>')
+    for a in (show_actors or []):
+        roles = a.get("roles") or [{}]
+        char = roles[0].get("character") if roles else a.get("character")
+        parts.append("<actor>")
+        parts.append(_el("name", a.get("name")))
+        parts.append(_el("role", char))
+        parts.append(_el("type", "Actor"))
+        parts.append(_el("sortorder", a.get("order")))
+        parts.append(_el("thumb", _img_url(a.get("profile_path"))))
+        parts.append("</actor>")
+    parts.append(_el("seasonnumber", season_number))
+    parts.append("</season>")
+    return "\n".join(parts)
