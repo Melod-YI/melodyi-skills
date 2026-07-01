@@ -196,3 +196,61 @@ class TestRenderText:
 
 # VIDEO_EXTS 仅用于断言一致性
 assert {".mkv", ".mp4"} <= VIDEO_EXTS
+
+
+class TestProbeStreamDetails:
+    """ffprobe 流信息探测（NFO streamdetails 用）"""
+
+    def test_probe_returns_video_audio(self, monkeypatch):
+        import json as _json
+        from pathlib import Path
+
+        fake_json = {
+            "streams": [
+                {"codec_name": "h264", "codec_type": "video", "width": 1920, "height": 1080,
+                 "avg_frame_rate": "24000/1001", "duration": "1420.5",
+                 "display_aspect_ratio": "16:9"},
+                {"codec_name": "aac", "codec_type": "audio", "channels": 2, "sample_rate": "48000"},
+            ]
+        }
+
+        class FakeProc:
+            stdout = _json.dumps(fake_json)
+            returncode = 0
+
+        monkeypatch.setattr(structure.subprocess, "run", lambda *a, **k: FakeProc())
+        sd = structure.probe_stream_details(Path("x.mkv"))
+        assert sd is not None
+        assert sd["video"]["codec"] == "h264"
+        assert sd["video"]["width"] == 1920
+        assert sd["video"]["duration_seconds"] == 1420  # float → int
+        assert sd["video"]["framerate"] == "23.976"
+        assert sd["audio"]["codec"] == "aac"
+        assert sd["audio"]["channels"] == 2
+        assert sd["audio"]["samplingrate"] == 48000
+
+    def test_probe_returns_none_on_failure(self, monkeypatch):
+        from pathlib import Path
+
+        def _raise(*a, **k):
+            raise FileNotFoundError("no ffprobe")
+
+        monkeypatch.setattr(structure.subprocess, "run", _raise)
+        assert structure.probe_stream_details(Path("x.mkv")) is None
+
+    def test_probe_video_only(self, monkeypatch):
+        import json as _json
+        from pathlib import Path
+
+        fake_json = {"streams": [
+            {"codec_name": "h265", "codec_type": "video", "width": 1280, "height": 720,
+             "avg_frame_rate": "24/1", "duration": "600"}]}
+
+        class FakeProc:
+            stdout = _json.dumps(fake_json)
+            returncode = 0
+
+        monkeypatch.setattr(structure.subprocess, "run", lambda *a, **k: FakeProc())
+        sd = structure.probe_stream_details(Path("x.mkv"))
+        assert "video" in sd and "audio" not in sd
+        assert sd["video"]["framerate"] == "24"

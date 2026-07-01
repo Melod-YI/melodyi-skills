@@ -66,6 +66,68 @@ def probe_duration_ffmpeg(path: Path) -> Optional[float]:
         return None
 
 
+def probe_stream_details(path: Path) -> Optional[dict]:
+    """用 ffprobe 取视频/音频流信息（NFO streamdetails 用）
+
+    Args:
+        path: 视频文件路径
+
+    Returns:
+        {"video": {codec,width,height,aspect,framerate,duration,duration_seconds},
+         "audio": {codec,channels,samplingrate}}，失败返回 None
+    """
+    import json
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error",
+             "-show_streams", "-of", "json", str(path)],
+            capture_output=True, text=True, timeout=60, check=True,
+        )
+        streams = json.loads(out.stdout).get("streams", [])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("ffprobe 取流信息失败: %s (%s)", path, exc)
+        return None
+    video = next((s for s in streams if s.get("codec_type") == "video"), None)
+    audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    result = {}
+    if video:
+        fr = _parse_frame_rate(video.get("avg_frame_rate"))
+        dur = video.get("duration")
+        result["video"] = {
+            "codec": video.get("codec_name"),
+            "width": video.get("width"),
+            "height": video.get("height"),
+            "aspect": video.get("display_aspect_ratio"),
+            "framerate": fr,
+            "duration": int(float(dur) // 60) if dur else None,  # 分钟
+            "duration_seconds": int(float(dur)) if dur else None,
+        }
+    if audio:
+        sr = audio.get("sample_rate")
+        result["audio"] = {
+            "codec": audio.get("codec_name"),
+            "channels": audio.get("channels"),
+            "samplingrate": int(sr) if sr else None,
+        }
+    return result or None
+
+
+def _parse_frame_rate(rate: Optional[str]) -> Optional[str]:
+    """'24000/1001' → '23.976'；'24/1' → '24'"""
+    if not rate or "/" not in rate:
+        return rate
+    try:
+        num, den = rate.split("/")
+        den_i = int(den)
+        if den_i == 0:
+            return rate
+        val = int(num) / den_i
+        s = f"{val:.3f}".rstrip("0").rstrip(".")
+        return s or "0"
+    except (ValueError, ZeroDivisionError):
+        return rate
+
+
 def _is_video(path: Path) -> bool:
     return path.suffix.lower() in VIDEO_EXTS
 
