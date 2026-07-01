@@ -87,6 +87,43 @@ def test_invalid_url_exits_1(tmp_path, monkeypatch):
     assert result.exit_code == 1
 
 
+def test_prs_command_outputs_json(tmp_path, monkeypatch):
+    captured = {}
+
+    def handler(req):
+        captured["url"] = str(req.url)
+        return httpx.Response(200, json=[
+            {"number": 1, "title": "t1", "user": {"login": "alice"}},
+            {"number": 2, "title": "t2", "user": {"login": "alice"}},
+        ])
+
+    _patch_client(monkeypatch, handler)
+    cfg = _write_cfg(tmp_path)
+
+    result = CliRunner().invoke(cli, [
+        "--config", str(cfg), "prs",
+        "https://gitcode.com/openJiuwen/jiuwenswarm",
+        "--author", "alice", "--state", "all",
+    ])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert [d["number"] for d in data] == [1, 2]
+    assert "/repos/openJiuwen/jiuwenswarm/pulls" in captured["url"]
+    assert "author=alice" in captured["url"]
+    assert "state=all" in captured["url"]
+
+
+def test_prs_invalid_repo_url_exits_1(tmp_path, monkeypatch):
+    _patch_client(monkeypatch, lambda req: httpx.Response(200, json=[]))
+    cfg = _write_cfg(tmp_path)
+
+    result = CliRunner().invoke(
+        cli, ["--config", str(cfg), "prs", "https://gitcode.com/onlyowner"]
+    )
+    assert result.exit_code == 1
+
+
 def test_comments_mine_filters_by_user(tmp_path, monkeypatch):
     calls = []
 

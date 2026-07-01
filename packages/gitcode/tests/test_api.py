@@ -87,7 +87,73 @@ def test_get_files_request_and_parse():
     data = client.get_files("owner", "repo", "123")
 
     assert [f["filename"] for f in data] == ["a.py", "b.py"]
-    assert captured["url"] == f"{API_BASE}/repos/owner/repo/pulls/123/files"
+    # 分页：单页即终止，请求带 page/per_page 参数
+    assert captured["url"].startswith(f"{API_BASE}/repos/owner/repo/pulls/123/files?")
+    assert "page=1" in captured["url"]
+    assert "per_page=100" in captured["url"]
+
+
+def test_get_files_paginates():
+    """超过一页时循环聚合，直到返回不足 100 条"""
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = int(request.url.params["page"])
+        calls.append(page)
+        if page == 1:
+            # 第一页满 100 条
+            return httpx.Response(200, json=[{"filename": f"f{i}.py"} for i in range(100)])
+        # 第二页 3 条，触发终止
+        return httpx.Response(200, json=[{"filename": f"g{i}.py"} for i in range(3)])
+
+    client = _client(handler)
+    data = client.get_files("owner", "repo", "123")
+
+    assert len(data) == 103
+    assert calls == [1, 2]
+
+
+def test_list_prs_request_params():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json=[{"number": 1, "title": "t"}])
+
+    client = _client(handler)
+    data = client.list_prs("owner", "repo", state="merged", author="alice")
+
+    assert data == [{"number": 1, "title": "t"}]
+    assert captured["url"].startswith(f"{API_BASE}/repos/owner/repo/pulls?")
+    assert "state=merged" in captured["url"]
+    assert "author=alice" in captured["url"]
+    assert "per_page=100" in captured["url"]
+    assert "page=1" in captured["url"]
+
+
+def test_list_prs_paginates():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = int(request.url.params["page"])
+        calls.append(page)
+        if page == 1:
+            return httpx.Response(200, json=[{"number": i} for i in range(100)])
+        return httpx.Response(200, json=[{"number": 100}, {"number": 101}])
+
+    client = _client(handler)
+    data = client.list_prs("owner", "repo")
+
+    assert len(data) == 102
+    assert calls == [1, 2]
+
+
+def test_list_prs_empty():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    client = _client(handler)
+    assert client.list_prs("owner", "repo") == []
 
 
 def test_get_comments_request_and_parse():

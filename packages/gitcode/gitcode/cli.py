@@ -1,6 +1,6 @@
 """CLI 命令行入口
 
-子命令：user / pr / files / comments / comment / resolve
+子命令：user / pr / prs / files / comments / comment / resolve
 
 日志风格参考 melodyi-filebot：默认静默（仅 ERROR），--verbose/-v 输出 INFO；
 业务错误用 click.echo(err=True) + sys.exit 友好报错，非 traceback。
@@ -18,7 +18,7 @@ import click
 
 from gitcode.api import APIError, GitCodeClient
 from gitcode.config import load_token
-from gitcode.url import UrlParseError, parse_pr_url
+from gitcode.url import UrlParseError, parse_pr_url, parse_repo_url
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +77,14 @@ def _ref(url: str):
         _fail(str(e), 1)
 
 
+def _repo_ref(url: str):
+    """解析仓库 URL；失败退出码 1"""
+    try:
+        return parse_repo_url(url)
+    except UrlParseError as e:
+        _fail(str(e), 1)
+
+
 @cli.command()
 @click.pass_context
 def user(ctx):
@@ -97,6 +105,32 @@ def pr(ctx, url):
     r = _ref(url)
     try:
         _print_json(client.get_pr(r.owner, r.repo, r.number))
+    except APIError as e:
+        _fail(str(e), 1)
+
+
+@cli.command()
+@click.argument("url")
+@click.option("--author", default=None, help="按创建者用户名过滤")
+@click.option(
+    "--state",
+    type=click.Choice(["all", "open", "closed", "merged"]),
+    default="all",
+    help="PR 状态过滤（默认 all，含未合并/已关闭）",
+)
+@click.pass_context
+def prs(ctx, url, author, state):
+    """列出仓库的 PR（仓库首页 URL 形式传入）
+
+    内部分页返回全部 PR。每个 PR 对象含 number/title/state/user.login/
+    added_lines/removed_lines/html_url 等，供调用方筛选与统计。
+    """
+    client = _build_client(ctx)
+    r = _repo_ref(url)
+    try:
+        _print_json(
+            client.list_prs(r.owner, r.repo, state=state, author=author)
+        )
     except APIError as e:
         _fail(str(e), 1)
 
