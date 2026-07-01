@@ -46,3 +46,22 @@ class TestTvshowXml:
         xml = nfo.build_tvshow_xml(data, bangumi_data=bg, language="zh-CN")
         assert "这是 bangumi 的简介" in xml
         assert "短" not in xml.split("<plot>")[1].split("</plot>")[0]
+
+    def test_tvshow_xml_uniqueid(self):
+        """uniqueid：TMDB 默认 + bangumi id 附加"""
+        bg = {"id": 364450, "summary": "", "name_cn": ""}
+        xml = nfo.build_tvshow_xml(_show_data(), bangumi_data=bg, language="zh-CN")
+        assert '<uniqueid type="tmdbid" default="true">154494</uniqueid>' in xml
+        assert '<uniqueid type="bgm">364450</uniqueid>' in xml
+
+    def test_tvshow_xml_uniqueid_no_bangumi(self):
+        """无 bangumi 时只输出 tmdbid uniqueid"""
+        xml = nfo.build_tvshow_xml(_show_data(), bangumi_data=None, language="zh-CN")
+        assert '<uniqueid type="tmdbid" default="true">154494</uniqueid>' in xml
+        assert "bgm" not in xml
+
+    def test_tvshow_xml_dateadded(self):
+        """dateadded 传入时输出"""
+        xml = nfo.build_tvshow_xml(_show_data(), bangumi_data=None, language="zh-CN",
+                                   dateadded="2026-07-01 12:00:00")
+        assert "<dateadded>2026-07-01 12:00:00</dateadded>" in xml

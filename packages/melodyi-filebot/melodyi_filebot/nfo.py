@@ -37,7 +37,8 @@ def _el(tag: str, text) -> str:
     return f"<{tag}>{escape(str(text))}</{tag}>"
 
 
-def build_tvshow_xml(show: dict, bangumi_data: Optional[dict], language: str) -> str:
+def build_tvshow_xml(show: dict, bangumi_data: Optional[dict], language: str,
+                     dateadded: Optional[str] = None) -> str:
     """TMDB show dict + 可选 bangumi dict → tvshow.nfo XML"""
     bg = bangumi_data or {}
     plot = _fill_overview(show.get("overview"), bg.get("summary"))
@@ -48,6 +49,8 @@ def build_tvshow_xml(show: dict, bangumi_data: Optional[dict], language: str) ->
     parts.append(_el("plot", plot))
     parts.append(_el("outline", plot))
     parts.append("<lockdata>true</lockdata>")
+    if dateadded:
+        parts.append(_el("dateadded", dateadded))
     parts.append(_el("title", title))
     parts.append(_el("originaltitle", original))
     for w in (show.get("created_by") or []):
@@ -71,6 +74,11 @@ def build_tvshow_xml(show: dict, bangumi_data: Optional[dict], language: str) ->
     parts.append(_el("imdb_id", ext.get("imdb_id")))
     parts.append(_el("tmdbid", show.get("id")))
     parts.append(_el("tvdbid", ext.get("tvdb_id")))
+    # uniqueid：TMDB 为默认标识，bangumi id 附加（type=bgm）
+    parts.append(f'<uniqueid type="tmdbid" default="true">{show.get("id")}</uniqueid>')
+    bg_id = (bangumi_data or {}).get("id")
+    if bg_id:
+        parts.append(f'<uniqueid type="bgm">{bg_id}</uniqueid>')
     poster = _img_url(show.get("poster_path"))
     fanart = _img_url(show.get("backdrop_path"))
     if poster or fanart:
