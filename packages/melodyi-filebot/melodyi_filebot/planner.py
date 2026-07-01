@@ -550,9 +550,7 @@ def build_plan_from_plan(plan: "Plan", dest_root: str, with_nfo: bool = True) ->
     warnings: list = list(plan.warnings)
     created_seasons: set = set()
     for m in plan.episodes:
-        if m.target.episode is None:
-            warnings.append(f"映射缺少集号，跳过: {m.file}")
-            continue
+        # Plan 已由 agent 终稿，FileTarget.episode 为必填 int，此处无需再校验缺失
         season = m.target.season
         season_dir = os.path.join(show_dir, _season_folder(season))
         if season not in created_seasons:
@@ -577,7 +575,7 @@ def build_plan_from_plan(plan: "Plan", dest_root: str, with_nfo: bool = True) ->
             type="tvshow", path=os.path.join(show_dir, "tvshow.nfo"), source=show_source))
         # season nfo（每个出现的季）
         season_sources = {s.season: s.source for s in plan.seasons}
-        for sn in created_seasons:
+        for sn in sorted(created_seasons):
             nfo_operations.append(NfoOperation(
                 type="season", path=os.path.join(show_dir, _season_folder(sn), "season.nfo"),
                 season=sn, source=season_sources.get(sn, NfoSource(provider="tmdb", tmdb_id=plan.show.tmdb_id, season=sn))))

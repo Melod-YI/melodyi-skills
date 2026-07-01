@@ -777,3 +777,10 @@ class TestBuildPlanFromPlan:
         plan = self._plan(tmp_path)
         result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=True)
         assert result.spec_applied == "plan"
+
+    def test_tvshow_nfo_first(self, tmp_path):
+        """tvshow nfo 操作应在 nfo_operations 首位"""
+        from melodyi_filebot import planner
+        plan = self._plan(tmp_path)
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=True)
+        assert result.nfo_operations[0].type == "tvshow"
