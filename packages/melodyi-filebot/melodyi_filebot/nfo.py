@@ -61,7 +61,9 @@ def build_tvshow_xml(show: dict, bangumi_data: Optional[dict], language: str,
     parts.append(_el("premiered", show.get("first_air_date")))
     parts.append(_el("enddate", show.get("last_air_date")))
     parts.append(_el("releasedate", show.get("first_air_date")))
-    parts.append(_el("runtime", show.get("episode_run_time")))
+    ert = show.get("episode_run_time")
+    runtime = ert[0] if isinstance(ert, list) and ert else ert
+    parts.append(_el("runtime", runtime))
     for g in (show.get("genres") or []):
         parts.append(_el("genre", g.get("name")))
     for k in ((show.get("keywords") or {}).get("results") or []):
@@ -75,8 +77,9 @@ def build_tvshow_xml(show: dict, bangumi_data: Optional[dict], language: str,
     parts.append(_el("tmdbid", show.get("id")))
     parts.append(_el("tvdbid", ext.get("tvdb_id")))
     # uniqueid：TMDB 为默认标识，bangumi id 附加（type=bgm）
-    parts.append(f'<uniqueid type="tmdbid" default="true">{show.get("id")}</uniqueid>')
-    bg_id = (bangumi_data or {}).get("id")
+    if show.get("id") is not None:
+        parts.append(f'<uniqueid type="tmdbid" default="true">{show.get("id")}</uniqueid>')
+    bg_id = bg.get("id")
     if bg_id:
         parts.append(f'<uniqueid type="bgm">{bg_id}</uniqueid>')
     poster = _img_url(show.get("poster_path"))
@@ -89,9 +92,11 @@ def build_tvshow_xml(show: dict, bangumi_data: Optional[dict], language: str,
             parts.append(_el("fanart", fanart))
         parts.append("</art>")
     for a in ((show.get("aggregate_credits") or {}).get("cast") or []):
+        roles = a.get("roles") or [{}]
+        char = roles[0].get("character") if roles else None
         parts.append("<actor>")
         parts.append(_el("name", a.get("name")))
-        parts.append(_el("role", a.get("character")))
+        parts.append(_el("role", char))
         parts.append(_el("type", "Actor"))
         parts.append(_el("sortorder", a.get("order")))
         parts.append(_el("thumb", _img_url(a.get("profile_path"))))

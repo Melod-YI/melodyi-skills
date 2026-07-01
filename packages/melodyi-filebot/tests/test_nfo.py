@@ -7,13 +7,13 @@ def _show_data():
     return {
         "id": 154494, "name": "莉可丽丝", "original_name": "リコリス・リコイル",
         "overview": "x" * 50, "first_air_date": "2022-07-02", "last_air_date": "2022-09-24",
-        "in_production": False, "episode_run_time": 24,
+        "in_production": False, "episode_run_time": [24],
         "genres": [{"id": 16, "name": "动画"}],
         "networks": [{"name": "BS11"}],
         "vote_average": 8.5,
         "poster_path": "/abc.jpg", "backdrop_path": "/def.jpg",
         "external_ids": {"imdb_id": "tt13293588", "tvdb_id": 371310},
-        "aggregate_credits": {"cast": [{"name": "内山夕实", "character": "鲁迪", "order": 0, "profile_path": "/p.jpg"}]},
+        "aggregate_credits": {"cast": [{"name": "内山夕实", "roles": [{"character": "鲁迪"}], "order": 0, "profile_path": "/p.jpg"}]},
         "keywords": {"results": [{"name": "isekai"}, {"name": "anime"}]},
         "content_ratings": {"results": [{"rating": "TV-MA", "iso_3166_1": "US"}]},
         "created_by": [{"name": "理不尽な孫の手"}],
@@ -38,6 +38,7 @@ class TestTvshowXml:
         assert "<status>Ended</status>" in xml  # in_production=False
         assert "image.tmdb.org/t/p/original/abc.jpg" in xml  # poster URL
         assert "<actor>" in xml and "内山夕实" in xml
+        assert "<role>鲁迪</role>" in xml  # 从 aggregate_credits.roles[0] 读取角色
 
     def test_tvshow_xml_bangumi_fill_when_overview_short(self):
         """TMDB overview <10 字时用 bangumi summary 填 plot"""
@@ -65,3 +66,9 @@ class TestTvshowXml:
         xml = nfo.build_tvshow_xml(_show_data(), bangumi_data=None, language="zh-CN",
                                    dateadded="2026-07-01 12:00:00")
         assert "<dateadded>2026-07-01 12:00:00</dateadded>" in xml
+
+    def test_tvshow_xml_escapes_special_chars(self):
+        """文本中的 & < > 应被 XML 转义"""
+        data = dict(_show_data(), name="A & B <C>", overview="x" * 50)
+        xml = nfo.build_tvshow_xml(data, bangumi_data=None, language="zh-CN")
+        assert "<title>A &amp; B &lt;C&gt;</title>" in xml
