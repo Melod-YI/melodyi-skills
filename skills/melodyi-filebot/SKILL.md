@@ -40,7 +40,7 @@ melodyi-filebot search "刀剑神域" --type multi
 - **复数结果**：列出候选，请用户确认 tmdb_id
 - **单一明确结果**：可直接进入下一步，但仍建议向用户展示命中
 
-> 已知案例：`莉可丽丝：友谊是时间的窃贼` 直接搜无结果——它是《莉可丽丝》(tmdb_id=46260) 的 S00 特别篇。回退搜 `莉可丽丝` 命中主剧，文件 `[01-06]` 映射到 `Season 00`。详见 `docs/search-heuristics.md`。
+> 已知案例：`莉可丽丝：友谊是时间的窃贼` 直接搜无结果——它是《莉可丽丝》(tmdb_id=46260) 的 S00 特别篇。回退搜 `莉可丽丝` 命中主剧，文件 `[01-06]` 映射到 `Season 00`。详见 `reference/search-heuristics.md`。
 
 ### 3. 获取摘要
 
@@ -133,40 +133,7 @@ melodyi-filebot generate-nfo --plan exec.json --execute
 
 > 注：P2 当前仅 TV（tvshow/season/episode NFO）。电影 NFO 与电影重命名留后。
 
-### 4. 构建计划
-
-```bash
-# 剧集
-melodyi-filebot build-plan --show-id <tmdb_id> --source <源目录> --dest <目标根目录> --language zh-CN --out plan.json
-# 电影
-melodyi-filebot build-plan --movie-id <tmdb_id> --source <源目录> --dest <目标根目录> --out plan.json
-```
-
-`--show-id` 与 `--movie-id` 二选一。计划写入 `--out` 指定文件并打印到 stdout。
-
-默认标准流程：文件按解析出的 S/E 放入目标结构。注意：
-- 季号优先从**文件名**解析（`S01E01`、`[01]` 等）。源目录的文件夹结构（如 `Season 2/`）**不被读取**作季来源。
-- **多季剧、源目录只是其中一季**：若文件名带季标记（`S02E01`）直接正确归类；若文件名**不带**季标记（番剧常见的 `[01]..[12]`），用 `--season N` 指定这一季的季号（文件名有显式季标记如 `S00` 特别篇仍以文件名为准，不被覆盖）。`--season` 仅适用于剧集。
-- 文件无法解析集号，或其他非标场景 → 出现在 `warnings`，需向用户确认如何处理
-- **伴生文件自动改名**：每个视频改名时，同目录下文件名以「视频 stem + `.`」开头的非视频文件（字幕 `.ass`/`.srt`、海报等 sidecar）会随之改名，目标名 = 改名后视频 stem + 原后缀（语言 token 如 `.TC` 原样保留，不猜测语言）。例如视频 `Show S01E01.mkv → 翼年代记 (2005) S01E01.mkv` 时，`Show S01E01.TC.ass` → `翼年代记 (2005) S01E01.TC.ass`。该逻辑对自动模式与 override（`--map`）模式同样生效；`draft-map` 仍只映射视频，伴生在 `build-plan` 阶段自动发现并跟随。stem 后非 `.` 的文件（如 `Show S01E01-extra.ass`）不被视为伴生。
-
-**季/集归属不确定时用 override（draft-then-edit）**：季/集判断随机性大，不靠规则硬编码。当文件名无季标记且季归属不明、`[01-06]` 可能是 S00/S01、集号需重排、一文件多集/一集多文件、特别篇归季不明时，走 override：
-
-```bash
-# 1. 生成映射初版（不调 TMDB，含无法解析项 season/episode=null）
-melodyi-filebot draft-map --show-id <tmdb_id> --source <源目录> [--season N] --out map.json
-
-# 2. 对照 fetch-summary 编辑 map.json：修正每项的 season/episode/episode_end/part
-
-# 3. 按显式映射构建计划（spec_applied=override，不解析文件名）
-melodyi-filebot build-plan --map map.json --dest <目标根目录> --out plan.json
-```
-
-`--map` 与 `--source`/`--show-id`/`--movie-id`/`--season` 互斥。映射格式与自动/override 边界详见 `reference/search-heuristics.md`（或 `docs/search-heuristics.md`）。
-
-
-
-### 5. 执行（默认 dry-run，必留事务日志）
+### 4. 执行（默认 dry-run，必留事务日志）
 
 ```bash
 # 先 dry-run 校验（不改动文件）
@@ -186,7 +153,7 @@ melodyi-filebot execute-plan --plan plan.json --execute --snapshot /path/to/snap
   - 指定 `--snapshot` → 写到指定路径
   - 执行后回显日志路径与 undo 用法
 
-### 6. 回滚（如需）
+### 5. 回滚（如需）
 
 ```bash
 melodyi-filebot undo <snapshot路径>
