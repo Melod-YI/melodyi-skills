@@ -19,6 +19,7 @@ from .browser import launch_browser
 from .config import build_config, parse_args, validate_credentials
 from .extractor import (
     analyze_captures,
+    build_warning,
     extract_data,
     extract_request_location,
     format_result,
@@ -136,13 +137,8 @@ async def run(argv: Optional[List[str]] = None) -> None:
             if config.output_file:
                 save_result(simplified, config.output_file)
 
-            # 多次调用且经纬度不一致时追加警告（取最新一次结果为准）
-            warning = None
-            if analysis["inconsistent"]:
-                warning = (
-                    f"⚠ 检测到 {analysis['count']} 次定位请求且经纬度不一致，"
-                    "已采用最后一次结果"
-                )
+            # 多次调用且经纬度不一致时追加警告（仅 --verbose 时输出，避免噪音）
+            warning = build_warning(analysis, config.verbose)
 
             # 输出最终结果
             print(
