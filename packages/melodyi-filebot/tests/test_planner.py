@@ -588,3 +588,92 @@ class TestDraftAndOverrideMap:
         assert moves[0].source == str(f1)
         assert "某电影 (2020).mkv" in moves[0].path
         assert result.spec_applied == "override"
+
+
+class TestDraftPlan:
+    """draft_plan: folder→target 输入 → Plan（含来源解析）"""
+
+    def _folder_spec(self, tmp_path):
+        (tmp_path / "E01.mkv").write_bytes(b"x")
+        (tmp_path / "E02.mkv").write_bytes(b"x")
+        return {
+            "show": {"tmdb_id": 154494, "bangumi_subject_id": 364450},
+            "folders": [{"path": str(tmp_path), "target": {"kind": "season", "season": 1}}],
+        }
+
+    def _fake_show(self):
+        from melodyi_filebot.models import ShowSummary, SeasonSummary
+        return ShowSummary(tmdb_id=154494, title="莉可丽丝", original_title="リコリス",
+                           year=2022, total_seasons=1, total_episodes=2,
+                           seasons=[SeasonSummary(season_number=1, name="S1", episode_count=2)])
+
+    def test_season_target_resolves_episode_sources(self, tmp_path):
+        from melodyi_filebot import planner
+        spec = self._folder_spec(tmp_path)
+        def fake_season_eps(tid, sn, language="zh-CN"):
+            from melodyi_filebot.models import EpisodeBrief
+            return [EpisodeBrief(episode_number=1, name="e1", overview_length=50),
+                    EpisodeBrief(episode_number=2, name="e2", overview_length=50)]
+        def fake_show(tid, language="zh-CN"):
+            return self._fake_show()
+        def fake_bg_eps(sid, ep_type=0):
+            from melodyi_filebot.models import BangumiEpisodeBrief
+            return [BangumiEpisodeBrief(episode_id=111, name="e1", name_cn="e1", sort=1, ep=1, desc="x"*20),
+                    BangumiEpisodeBrief(episode_id=222, name="e2", name_cn="e2", sort=2, ep=2, desc="x"*20)]
+        plan = planner.draft_plan(
+            spec, language="zh-CN",
+            fetch_show_summary=fake_show, fetch_season_episodes=fake_season_eps,
+            fetch_bangumi_episodes=fake_bg_eps,
+        )
+        assert plan.show.tmdb_id == 154494
+        assert plan.show.bangumi_subject_id == 364450
+        assert len(plan.episodes) == 2
+        e1 = plan.episodes[0]
+        assert e1.source.tmdb_id == 154494 and e1.source.season == 1 and e1.source.episode == 1
+        assert e1.source.bangumi_subject_id == 364450 and e1.source.bangumi_episode_id == 111
+        assert e1.target.season == 1 and e1.target.episode == 1
+        assert len(plan.seasons) == 1 and plan.seasons[0].season == 1
+
+    def test_unparsable_file_warning(self, tmp_path):
+        from melodyi_filebot import planner
+        (tmp_path / "no_episode_number.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 1},
+                "folders": [{"path": str(tmp_path), "target": {"kind": "season", "season": 1}}]}
+        plan = planner.draft_plan(
+            spec, language="zh-CN",
+            fetch_show_summary=lambda tid, language="zh-CN": self._fake_show(),
+            fetch_season_episodes=lambda tid, sn, language="zh-CN": [],
+            fetch_bangumi_episodes=lambda sid, ep_type=0: [],
+        )
+        assert plan.warnings  # 有告警
+        assert plan.episodes == []
+
+    def test_tmdb_missing_season_uses_bangumi(self, tmp_path):
+        """物语：TMDB 无该季 → source.tmdb=null，bangumi 为主"""
+        from melodyi_filebot import planner
+        (tmp_path / "E01.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 1, "bangumi_subject_id": 999},
+                "folders": [{"path": str(tmp_path),
+                             "target": {"kind": "season", "season": 3},
+                             "bangumi_subject_id": 999}]}
+        def fake_show(tid, language="zh-CN"):
+            from melodyi_filebot.models import ShowSummary
+            return ShowSummary(tmdb_id=1, title="物语", original_title="", year=2009,
+                               total_seasons=1, total_episodes=1, seasons=[])
+        def fake_season_eps(tid, sn, language="zh-CN"):
+            raise RuntimeError("TMDB 无此季")
+        def fake_bg_eps(sid, ep_type=0):
+            from melodyi_filebot.models import BangumiEpisodeBrief
+            return [BangumiEpisodeBrief(episode_id=555, name="e1", name_cn="e1", sort=1, ep=1, desc="x"*20)]
+        plan = planner.draft_plan(
+            spec, language="zh-CN",
+            fetch_show_summary=fake_show, fetch_season_episodes=fake_season_eps,
+            fetch_bangumi_episodes=fake_bg_eps,
+        )
+        s3 = next(s for s in plan.seasons if s.season == 3)
+        assert s3.source.provider == "bangumi" and s3.source.bangumi_subject_id == 999
+        e = plan.episodes[0]
+        assert e.source.tmdb_id is None
+        assert e.source.provider == "bangumi"
+        assert e.source.bangumi_episode_id == 555
+        assert any("TMDB 无第 3 季" in w for w in plan.warnings)

@@ -391,3 +391,120 @@ def build_plan_movie_from_map(
 
     logger.info("按映射构建电影计划完成: movie=%s", movie.title)
     return BuildPlanResult(operations=operations, spec_applied="override", warnings=warnings)
+
+
+def draft_plan(
+    folder_spec: dict,
+    language: str = "zh-CN",
+    fetch_show_summary=None,
+    fetch_season_episodes=None,
+    fetch_bangumi_episodes=None,
+) -> "Plan":
+    """folder→target 输入 → Plan（调 API 解析来源）
+
+    Args:
+        folder_spec: {show: {tmdb_id, bangumi_subject_id?}, folders: [{path, target, bangumi_subject_id?}]}
+        language: 语言
+        fetch_*: 可注入的 fetch 函数（单测用）；默认接 tmdb/bangumi 模块
+
+    Returns:
+        Plan（纯映射，含来源 spec 与 warnings）
+    """
+    from melodyi_filebot.models import (
+        Plan, ShowRef, SeasonEntry, EpisodeEntry, FileTarget, NfoSource,
+    )
+    if fetch_show_summary is None:
+        from melodyi_filebot import tmdb as _tmdb
+        fetch_show_summary = _tmdb.get_show_summary
+    if fetch_season_episodes is None:
+        from melodyi_filebot import tmdb as _tmdb
+        fetch_season_episodes = _tmdb.get_season_episodes
+    if fetch_bangumi_episodes is None:
+        from melodyi_filebot import bangumi as _bg
+        fetch_bangumi_episodes = _bg.get_subject_episodes
+
+    logger.info("draft_plan 开始: folder_spec=%s, language=%s", folder_spec, language)
+    show_spec = folder_spec["show"]
+    tmdb_id = show_spec["tmdb_id"]
+    show_bg = show_spec.get("bangumi_subject_id")
+    show = fetch_show_summary(tmdb_id, language=language)
+    show_ref = ShowRef(
+        tmdb_id=tmdb_id, bangumi_subject_id=show_bg,
+        title=show.title, original_title=show.original_title,
+        year=show.year, language=language,
+    )
+    seasons_seen: dict = {}  # season -> SeasonEntry
+    episodes: list = []
+    warnings: list = []
+    for folder in folder_spec["folders"]:
+        folder_bg = folder.get("bangumi_subject_id", show_bg)
+        target = folder["target"]
+        folder_path = Path(folder["path"])
+        files = [str(p) for p in sorted(folder_path.iterdir())
+                 if p.suffix.lower() in VIDEO_EXTS] if folder_path.is_dir() else []
+        if target["kind"] == "season":
+            sn = target["season"]
+            try:
+                tmdb_eps = {e.episode_number: e for e in fetch_season_episodes(tmdb_id, sn, language=language)}
+                tmdb_season_present = True
+            except RuntimeError:
+                tmdb_eps = {}
+                tmdb_season_present = False
+                warnings.append(f"TMDB 无第 {sn} 季，来源切 bangumi: {folder['path']}")
+                logger.warning("TMDB 无第 %d 季，来源切 bangumi: %s", sn, folder['path'])
+            if sn not in seasons_seen:
+                src = NfoSource(
+                    provider="bangumi" if not tmdb_season_present else "tmdb",
+                    tmdb_id=tmdb_id if tmdb_season_present else None,
+                    season=sn if tmdb_season_present else None,
+                    bangumi_subject_id=folder_bg if not tmdb_season_present else None,
+                )
+                seasons_seen[sn] = SeasonEntry(season=sn, source=src)
+        elif target["kind"] == "episode_group":
+            # episode_group 完整解析留后；此处按文件序号 + season 占位
+            tmdb_eps = {}
+            sn = target.get("season", 1)
+            tmdb_season_present = True
+            if sn not in seasons_seen:
+                seasons_seen[sn] = SeasonEntry(
+                    season=sn, source=NfoSource(provider="tmdb", tmdb_id=tmdb_id, season=sn))
+        else:
+            warnings.append(f"未知 target.kind: {target['kind']}")
+            logger.warning("未知 target.kind: %s", target['kind'])
+            continue
+        # bangumi 集列表（按集号映射）
+        bg_eps = {}
+        if folder_bg:
+            for be in fetch_bangumi_episodes(folder_bg):
+                ep_num = be.ep or int(be.sort)
+                if ep_num is not None:
+                    bg_eps[ep_num] = be
+        for f in files:
+            parsed = parse_filename(f)
+            ep = parsed.episode
+            if ep is None:
+                warnings.append(f"无法解析集号: {f}")
+                logger.warning("无法解析集号: %s", f)
+                continue
+            bg_ep = bg_eps.get(ep)
+            src = NfoSource(
+                provider="bangumi" if not tmdb_season_present else "tmdb",
+                tmdb_id=tmdb_id if tmdb_season_present else None,
+                season=sn if tmdb_season_present else None,
+                episode=ep if tmdb_season_present else None,
+                bangumi_subject_id=folder_bg,
+                bangumi_episode_id=bg_ep.episode_id if bg_ep else None,
+            )
+            if not tmdb_season_present and not bg_ep:
+                warnings.append(f"bangumi 未匹配到第 {ep} 集: {f}")
+                logger.warning("bangumi 未匹配到第 %d 集: %s", ep, f)
+            episodes.append(EpisodeEntry(
+                file=os.path.normpath(f),
+                target=FileTarget(season=sn, episode=ep,
+                                  episode_end=parsed.episode_end, part=parsed.part),
+                source=src,
+            ))
+    logger.info("draft_plan 完成: 季数=%d, 集数=%d, 警告数=%d",
+                len(seasons_seen), len(episodes), len(warnings))
+    return Plan(show=show_ref, seasons=list(seasons_seen.values()),
+                episodes=episodes, warnings=warnings)
