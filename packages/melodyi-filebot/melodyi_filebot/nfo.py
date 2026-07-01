@@ -37,6 +37,22 @@ def _el(tag: str, text) -> str:
     return f"<{tag}>{escape(str(text))}</{tag}>"
 
 
+def _bg_duration_to_minutes(duration: Optional[str]) -> Optional[int]:
+    """bangumi duration '00:24:00' → 分钟数（24）；解析失败返回 None"""
+    if not duration:
+        return None
+    try:
+        parts = duration.split(":")
+        if len(parts) == 3:
+            h, m, s = int(parts[0]), int(parts[1]), int(parts[2])
+            return h * 60 + m + (1 if s >= 30 else 0)  # 秒数四舍五入
+        if len(parts) == 2:
+            return int(parts[0]) * 60 + int(parts[1])
+        return int(parts[0])
+    except (ValueError, AttributeError):
+        return None
+
+
 def build_tvshow_xml(show: dict, bangumi_data: Optional[dict], language: str,
                      dateadded: Optional[str] = None) -> str:
     """TMDB show dict + 可选 bangumi dict → tvshow.nfo XML"""
@@ -202,7 +218,10 @@ def build_episode_xml(ep: dict, bangumi_data: Optional[dict], show_title: str,
     parts.append(_el("rating", ep.get("vote_average")))
     air = ep.get("air_date") or bg.get("airdate")
     parts.append(_el("year", (air or "")[:4] or None))
-    parts.append(_el("runtime", ep.get("runtime")))
+    runtime = ep.get("runtime")
+    if runtime is None:
+        runtime = _bg_duration_to_minutes(bg.get("duration"))
+    parts.append(_el("runtime", runtime))
     parts.append(_el("showtitle", show_title))
     parts.append(_el("episode", target_episode))
     parts.append(_el("season", target_season))

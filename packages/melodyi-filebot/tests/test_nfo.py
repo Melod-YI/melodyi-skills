@@ -181,6 +181,16 @@ class TestEpisodeXml:
         assert "bangumi 集简介" in xml
         assert '<uniqueid type="bgm">1111258</uniqueid>' in xml  # bangumi episode id
 
+    def test_episode_xml_runtime_bangumi_fallback(self):
+        """TMDB runtime 缺失时用 bangumi duration 转分钟补"""
+        ep = dict(_episode_data(), runtime=None)
+        bg = {"id": 111, "desc": "x" * 20, "duration": "00:24:30"}
+        xml = nfo.build_episode_xml(
+            ep, bangumi_data=bg, show_title="x",
+            target_season=1, target_episode=1, stream_details=None,
+        )
+        assert "<runtime>25</runtime>" in xml  # 24 分 30 秒 → 25（秒数四舍五入）
+
     def test_episode_xml_no_streamdetails_when_none(self):
         xml = nfo.build_episode_xml(
             _episode_data(), bangumi_data=None, show_title="x",
