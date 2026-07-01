@@ -26,6 +26,7 @@ from .extractor import (
     simplify_response,
     validate_response,
 )
+from .favorites import find_nearby_favorites, format_nearby_favorites, load_favorites
 from .interceptor import Interceptor, click_find_device, wait_for_data
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,21 @@ async def run(argv: Optional[List[str]] = None) -> None:
             location = extract_request_location(latest)
             if location is not None:
                 simplified["location"] = location
+
+            # 收藏点匹配：仅在有定位坐标时进行（200m 内视为在该收藏点附近）
+            matches = []
+            if location is not None:
+                favorites = load_favorites()
+                if favorites:
+                    matches = find_nearby_favorites(
+                        location["latitude"], location["longitude"], favorites
+                    )
+                    if matches:
+                        # 同步写入 JSON 输出（命中时才注入该字段）
+                        simplified["nearby_favorites"] = matches
+                    logger.info("收藏点命中 %d 个", len(matches))
+            favorites_block = format_nearby_favorites(matches)
+
             if config.output_file:
                 save_result(simplified, config.output_file)
 
@@ -129,7 +145,11 @@ async def run(argv: Optional[List[str]] = None) -> None:
                 )
 
             # 输出最终结果
-            print(format_result(result["address"], location, config.output_file, warning))
+            print(
+                format_result(
+                    result["address"], location, config.output_file, warning, favorites_block
+                )
+            )
 
             await context.close()
         finally:

@@ -226,19 +226,23 @@ def format_result(
     location: Optional[Dict[str, float]],
     output_file: Optional[str],
     warning: Optional[str] = None,
+    favorites_block: Optional[str] = None,
 ) -> str:
     """
     格式化最终标准输出文本。
 
-    输出顺序：用户当前地址 → 纬度/经度（各有中英文标注，若有）→ 警告（若有）→ 详细数据文件路径（若指定 --output）。
+    输出顺序：用户当前地址 → 纬度/经度（各有中英文标注，若有）→ 附近收藏点块（若有）
+    → 警告（若有）→ 详细数据文件路径（若指定 --output）。
     未捕获到经纬度时省略经纬度行；未指定 --output 时不输出文件路径行；
-    未发生入参不一致时 warning 为 None，省略警告行。
+    未发生入参不一致时 warning 为 None，省略警告行；无命中收藏点时
+    favorites_block 为 None，省略收藏点块。
 
     Args:
         address: 用户当前地址（addressDescription）
         location: 请求 payload 中提取的经纬度 {"latitude", "longitude"}，无则为 None
         output_file: --output 指定时的输出文件路径，未指定为 None
         warning: 多次调用且入参不一致时的警告文本，无则为 None
+        favorites_block: 附近命中收藏点的多行文本块（format_nearby_favorites 返回），无则为 None
 
     Returns:
         多行标准输出文本
@@ -247,6 +251,8 @@ def format_result(
     if location is not None:
         lines.append(f"纬度(latitude): {location['latitude']}")
         lines.append(f"经度(longitude): {location['longitude']}")
+    if favorites_block:
+        lines.append(favorites_block)
     if warning:
         lines.append(warning)
     if output_file:

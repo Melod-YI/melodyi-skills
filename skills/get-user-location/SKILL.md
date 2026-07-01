@@ -30,6 +30,21 @@ python <skill-path>/script/run.py --output .
 
 也可用 `--config <路径>` 指定任意配置文件。脚本启动时会校验，缺失时会打印错误并退出。
 
+## 收藏点（附近地点判断）
+
+定位精度有限：反向地理编码得到的地址文本在经纬度小幅偏移时，描述可能偏差较大（例如定位点偏移几十米后，命中的街道/POI 文本可能完全不同）；但经纬度本身偏差很小。**收藏点功能**通过比较经纬度的球面距离，更稳定地判断用户是否处于特定地点附近（例如家附近、公司附近），作为地址文本的补充——只要定位点落在收藏点 200m 范围内，即视为「在该收藏点附近」并在结果中列出。
+
+收藏点存放在独立文件 `~/.melodyi-skills/get-user-location/favorites.json`（与凭据 `config.json` 分离），格式为 JSON 顶层数组：
+
+```json
+[
+  {"name": "家", "latitude": 31.97951, "longitude": 118.76740},
+  {"name": "公司", "latitude": 31.98500, "longitude": 118.77000}
+]
+```
+
+每条记录需含 `name`（字符串）、`latitude`/`longitude`（数值）。文件不存在或格式非法时静默忽略（不影响定位主流程）；字段缺失或类型非法的单条记录会被跳过。匹配半径固定 200m，多个命中按距离从近到远排序。仅当成功捕获到定位经纬度时才进行匹配。
+
 ## 读取输出
 
 脚本的标准输出格式如下（地址一行，纬度/经度各一行，均带中英文标注）：
@@ -48,10 +63,28 @@ python <skill-path>/script/run.py --output .
 用户当前地址: 江苏省南京市雨花台区雨花街道华为南京研究所A区
 纬度(latitude): 31.97951
 经度(longitude): 118.76740
+附近收藏点:
+  - 家 (85m)
+  - 公司 (121m)
 详细数据已保存到 C:/workspace/helper/reverse-geocode-response.json（包含省市区行政区划、附近 POI 等信息）
 ```
 
 **不指定 `--output` 时不保存任何文件，仅标准输出地址与经纬度。**
+
+### 附近收藏点输出
+
+当定位点落在某收藏点 200m 内时，stdout 会在经纬度行之后追加「附近收藏点」块，列出每个命中收藏点的名称与距离（四舍五入到整米），按距离从近到远排序：
+
+```
+用户当前地址: 江苏省南京市雨花台区雨花街道华为南京研究所A区
+纬度(latitude): 31.97951
+经度(longitude): 118.76740
+附近收藏点:
+  - 家 (85m)
+  - 公司 (121m)
+```
+
+无任何收藏点命中时省略整个块。未配置 `favorites.json` 或文件缺失时同样省略，不影响定位主流程。
 
 ### 多次调用与入参不一致
 
@@ -84,7 +117,10 @@ python <skill-path>/script/run.py --output .
     "adminLevel3": "区", "adminLevel4": "街道",
     "countryCode": "CN", "countryName": "中国",
     "city": { "cityName": "市", "cityCode": "区号" }
-  }
+  },
+  "nearby_favorites": [
+    { "name": "家", "latitude": 31.97951, "longitude": 118.76740, "distance_m": 85.2 }
+  ]
 }
 ```
 
@@ -95,6 +131,7 @@ python <skill-path>/script/run.py --output .
 | `location` | 顶层经纬度，取自 reverseGeocode **请求 payload**（即本次查询的输入经纬度），是输出中最真实准确的定位坐标；未捕获到 payload 时该字段省略 |
 | `addressComponent` | 结构化行政区划：`adminLevel1`(省)、`adminLevel2`(市)、`adminLevel3`(区)、`adminLevel4`(街道) |
 | `pois` | 附近兴趣点列表（按距离升序，至多 2 个），每个 POI 含 `name`、`address`、`distance`、`poiType`、`location`(经纬度) |
+| `nearby_favorites` | 200m 内命中的收藏点列表（按距离升序），每项含 `name`、`latitude`、`longitude`、`distance_m`(米)；无命中或未配置收藏点时该字段省略 |
 
 ## 环境自检与修复
 

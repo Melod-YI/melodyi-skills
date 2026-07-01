@@ -420,3 +420,63 @@ class TestFormatResultWarning:
         )
 
 
+class TestFormatResultFavorites:
+    """附近收藏点块（favorites_block）输出测试"""
+
+    LOC = {"latitude": 31.97951, "longitude": 118.7674}
+    FAV_BLOCK = "附近收藏点:\n  - 家 (85m)\n  - 公司 (121m)"
+
+    def test_favorites_after_location(self):
+        """收藏点块紧跟经度行。"""
+        text = extractor.format_result("南京市A区", self.LOC, None, None, self.FAV_BLOCK)
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "纬度(latitude): 31.97951\n"
+            "经度(longitude): 118.7674\n"
+            "附近收藏点:\n  - 家 (85m)\n  - 公司 (121m)"
+        )
+
+    def test_favorites_before_warning(self):
+        """收藏点块在警告行之前。"""
+        text = extractor.format_result(
+            "南京市A区", self.LOC, None, "⚠ 不一致警告", self.FAV_BLOCK
+        )
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "纬度(latitude): 31.97951\n"
+            "经度(longitude): 118.7674\n"
+            "附近收藏点:\n  - 家 (85m)\n  - 公司 (121m)\n"
+            "⚠ 不一致警告"
+        )
+
+    def test_favorites_before_output_file(self):
+        """收藏点块在文件路径行之前。"""
+        text = extractor.format_result(
+            "南京市A区", self.LOC, "C:/tmp/x.json", None, self.FAV_BLOCK
+        )
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "纬度(latitude): 31.97951\n"
+            "经度(longitude): 118.7674\n"
+            "附近收藏点:\n  - 家 (85m)\n  - 公司 (121m)\n"
+            "详细数据已保存到 C:/tmp/x.json（包含省市区行政区划、附近 POI 等信息）"
+        )
+
+    def test_favorites_rendered_even_without_location(self):
+        """format_result 不强制收藏点块依赖经纬度；只要传入就渲染（main.py 实际不会无经纬度时传入）。"""
+        text = extractor.format_result("南京市A区", None, None, None, self.FAV_BLOCK)
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "附近收藏点:\n  - 家 (85m)\n  - 公司 (121m)"
+        )
+
+    def test_no_favorites_block_unchanged(self):
+        """回归：不传 favorites_block 时输出与原来一致。"""
+        text = extractor.format_result("南京市A区", self.LOC, None)
+        assert text == (
+            "用户当前地址: 南京市A区\n"
+            "纬度(latitude): 31.97951\n"
+            "经度(longitude): 118.7674"
+        )
+
+
