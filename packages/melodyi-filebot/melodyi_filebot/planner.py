@@ -180,6 +180,7 @@ def draft_plan(
     fetch_season_episodes=None,
     fetch_bangumi_episodes=None,
     fetch_movie_summary=None,
+    fetch_episode_group=None,
 ) -> "Plan":
     """folder→target 输入 → Plan（调 API 解析来源）
 
@@ -188,6 +189,8 @@ def draft_plan(
         language: 语言
         fetch_*: 可注入的 fetch 函数（单测用）；默认接 tmdb/bangumi 模块。
             电影 folder（target.kind=movie）走 fetch_movie_summary（默认 tmdb.get_movie_summary）。
+            剧集组 folder（target.kind=episode_group）走 fetch_episode_group（默认 tmdb.get_episode_group），
+            按文件序号映射组内第 N 集的真实 (season, episode) 坐标。
     Returns:
         Plan（纯映射，含来源 spec 与 warnings）
     """
@@ -206,6 +209,9 @@ def draft_plan(
     if fetch_movie_summary is None:
         from melodyi_filebot import tmdb as _tmdb
         fetch_movie_summary = _tmdb.get_movie_summary
+    if fetch_episode_group is None:
+        from melodyi_filebot import tmdb as _tmdb
+        fetch_episode_group = _tmdb.get_episode_group
 
     logger.info("draft_plan 开始: folder_spec=%s, language=%s", folder_spec, language)
     show_spec = folder_spec["show"]
@@ -283,13 +289,56 @@ def draft_plan(
                 )
                 seasons_seen[sn] = SeasonEntry(season=sn, source=src)
         elif target["kind"] == "episode_group":
-            # episode_group 完整解析留后；此处按文件序号 + season 占位
-            tmdb_eps = {}
-            sn = target.get("season", 1)
-            tmdb_season_present = True
-            if sn not in seasons_seen:
-                seasons_seen[sn] = SeasonEntry(
-                    season=sn, source=NfoSource(provider="tmdb", tmdb_id=tmdb_id, season=sn))
+            # 调 get_episode_group 取子组+集列表，扁平化按序号映射真实 (season, episode) 坐标
+            group_id = target["group_id"]
+            detail = fetch_episode_group(group_id, language=language)
+            logger.info("episode_group 解析: group_id=%s, 子组数=%d, 集数=%d",
+                        group_id, len(detail.sub_groups),
+                        sum(len(sg.episodes) for sg in detail.sub_groups))
+            flat = [e for sg in detail.sub_groups for e in sg.episodes]
+            group_eps = {idx + 1: e for idx, e in enumerate(flat)}  # 序号 N → 第 N 集（1-based）
+            # 为每个真实季建 SeasonEntry（source 落真实季坐标）
+            for e in flat:
+                sn_real = e.season_number
+                if sn_real is not None and sn_real not in seasons_seen:
+                    seasons_seen[sn_real] = SeasonEntry(
+                        season=sn_real,
+                        source=NfoSource(provider="tmdb", tmdb_id=tmdb_id, season=sn_real))
+            # bangumi 集列表（按文件序号匹配，与 season 分支一致）
+            bg_eps = {}
+            if folder_bg:
+                for be in fetch_bangumi_episodes(folder_bg):
+                    ep_num = be.ep or int(be.sort)
+                    if ep_num is not None:
+                        bg_eps[ep_num] = be
+            for f in files:
+                parsed = parse_filename(f)
+                ep = parsed.episode
+                if ep is None:
+                    warnings.append(f"无法解析集号: {f}")
+                    logger.warning("无法解析集号: %s", f)
+                    continue
+                brief = group_eps.get(ep)
+                if brief is None or brief.season_number is None:
+                    warnings.append(f"组内无第 {ep} 集: {f}")
+                    logger.warning("组内无第 %d 集: %s", ep, f)
+                    continue
+                sn_real = brief.season_number
+                ep_real = brief.episode_number
+                bg_ep = bg_eps.get(ep)
+                src = NfoSource(
+                    provider="tmdb", tmdb_id=tmdb_id,
+                    season=sn_real, episode=ep_real,
+                    bangumi_subject_id=folder_bg,
+                    bangumi_episode_id=bg_ep.episode_id if bg_ep else None,
+                )
+                episodes.append(EpisodeEntry(
+                    file=os.path.normpath(f),
+                    target=FileTarget(season=sn_real, episode=ep_real,
+                                      episode_end=parsed.episode_end, part=parsed.part),
+                    source=src,
+                ))
+            continue  # 跳过下方 season 分支共享的 file loop
         else:
             warnings.append(f"未知 target.kind: {target['kind']}")
             logger.warning("未知 target.kind: %s", target['kind'])

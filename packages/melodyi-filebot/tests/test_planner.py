@@ -143,25 +143,102 @@ class TestDraftPlan:
         assert e.source.bangumi_episode_id == 555
         assert any("TMDB 无第 3 季" in w for w in plan.warnings)
 
-    def test_episode_group_target_placeholder(self, tmp_path):
-        """episode_group target：占位 source（provider=tmdb），target.season 默认 1"""
+    def _fake_episode_group(self):
+        """两组：正片 S1E1/S1E2 + OVA S0E1（跨季），flatten = [S1E1, S1E2, S0E1]"""
+        from melodyi_filebot.models import (
+            EpisodeGroupDetail, EpisodeGroupSub, EpisodeBrief)
+        return EpisodeGroupDetail(
+            id="g1", name="制作顺序", type=6, episode_count=3, group_count=2,
+            sub_groups=[
+                EpisodeGroupSub(name="正片", episodes=[
+                    EpisodeBrief(episode_number=1, name="e1", season_number=1),
+                    EpisodeBrief(episode_number=2, name="e2", season_number=1),
+                ]),
+                EpisodeGroupSub(name="OVA", episodes=[
+                    EpisodeBrief(episode_number=1, name="ova1", season_number=0),
+                ]),
+            ])
+
+    def test_episode_group_resolves_real_coordinates(self, tmp_path):
+        """episode_group：文件序号 N → 组内第 N 集的真实 (season, episode)"""
         from melodyi_filebot import planner
-        (tmp_path / "E01.mkv").write_bytes(b"x")
+        for n in (1, 2, 3):
+            (tmp_path / f"E{n:02d}.mkv").write_bytes(b"x")
         spec = {"show": {"tmdb_id": 154494},
                 "folders": [{"path": str(tmp_path),
-                             "target": {"kind": "episode_group", "group_id": "abc"}}]}
+                             "target": {"kind": "episode_group", "group_id": "g1"}}]}
         plan = planner.draft_plan(
             spec, language="zh-CN",
             fetch_show_summary=lambda tid, language="zh-CN": self._fake_show(),
             fetch_season_episodes=lambda tid, sn, language="zh-CN": [],
             fetch_bangumi_episodes=lambda sid, ep_type=0: [],
+            fetch_episode_group=lambda gid, language="zh-CN": self._fake_episode_group(),
         )
-        assert len(plan.episodes) == 1
-        e = plan.episodes[0]
-        assert e.source.provider == "tmdb"
-        assert e.source.tmdb_id == 154494
-        assert e.target.season == 1  # 默认
-        assert e.target.episode == 1
+        assert len(plan.episodes) == 3
+        # E01 → S1E1, E02 → S1E2, E03 → S0E1（跨季）
+        coords = [(e.target.season, e.target.episode, e.source.season, e.source.episode)
+                  for e in plan.episodes]
+        assert coords == [(1, 1, 1, 1), (1, 2, 1, 2), (0, 1, 0, 1)]
+        # source 均为 tmdb + tmdb_id
+        assert all(e.source.provider == "tmdb" and e.source.tmdb_id == 154494
+                   for e in plan.episodes)
+        # 跨季：两个真实季的 SeasonEntry
+        assert sorted(s.season for s in plan.seasons) == [0, 1]
+
+    def test_episode_group_missing_episode_warning(self, tmp_path):
+        """文件序号超出组内集数 → warning，不进 episodes"""
+        from melodyi_filebot import planner
+        (tmp_path / "E05.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 1},
+                "folders": [{"path": str(tmp_path),
+                             "target": {"kind": "episode_group", "group_id": "g1"}}]}
+        plan = planner.draft_plan(
+            spec, language="zh-CN",
+            fetch_show_summary=lambda tid, language="zh-CN": self._fake_show(),
+            fetch_season_episodes=lambda tid, sn, language="zh-CN": [],
+            fetch_bangumi_episodes=lambda sid, ep_type=0: [],
+            fetch_episode_group=lambda gid, language="zh-CN": self._fake_episode_group(),
+        )
+        assert len(plan.episodes) == 0
+        assert any("组内无第 5 集" in w for w in plan.warnings)
+
+    def test_episode_group_passes_group_id(self, tmp_path):
+        """target.group_id 透传给 fetch_episode_group"""
+        from melodyi_filebot import planner
+        (tmp_path / "E01.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 1},
+                "folders": [{"path": str(tmp_path),
+                             "target": {"kind": "episode_group", "group_id": "abc123"}}]}
+        received = []
+        def fake_g(gid, language="zh-CN"):
+            received.append(gid)
+            return self._fake_episode_group()
+        planner.draft_plan(
+            spec, language="zh-CN",
+            fetch_show_summary=lambda tid, language="zh-CN": self._fake_show(),
+            fetch_season_episodes=lambda tid, sn, language="zh-CN": [],
+            fetch_bangumi_episodes=lambda sid, ep_type=0: [],
+            fetch_episode_group=fake_g,
+        )
+        assert received == ["abc123"]
+
+    def test_episode_group_unparsed_file_warning(self, tmp_path):
+        """文件名无集号 → warning（与 season 分支一致）"""
+        from melodyi_filebot import planner
+        (tmp_path / "trailer.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 1},
+                "folders": [{"path": str(tmp_path),
+                             "target": {"kind": "episode_group", "group_id": "g1"}}]}
+        plan = planner.draft_plan(
+            spec, language="zh-CN",
+            fetch_show_summary=lambda tid, language="zh-CN": self._fake_show(),
+            fetch_season_episodes=lambda tid, sn, language="zh-CN": [],
+            fetch_bangumi_episodes=lambda sid, ep_type=0: [],
+            fetch_episode_group=lambda gid, language="zh-CN": self._fake_episode_group(),
+        )
+        assert len(plan.episodes) == 0
+        assert any("无法解析集号" in w for w in plan.warnings)
+
 
     def test_tmdb_missing_season_no_bangumi_warns(self, tmp_path):
         """TMDB 无季且无 bangumi → 不产生 broken bangumi source，告警"""
@@ -388,3 +465,35 @@ class TestBuildPlanFromPlan:
         moves = [o for o in result.operations if o.type == "move"]
         sub_move = next(o for o in moves if o.source.endswith(".ass"))
         assert sub_move.path.endswith("搏击俱乐部 (1999).zh.ass")
+
+    def test_build_plan_episode_group_cross_season(self, tmp_path):
+        """剧集组跨季：build-plan 为每个真实季建 Season 目录 + 集落到对应季"""
+        from melodyi_filebot import planner
+        from melodyi_filebot.models import (
+            Plan, ShowRef, SeasonEntry, EpisodeEntry, FileTarget, NfoSource)
+        src = tmp_path / "src"; src.mkdir()
+        (src / "E01.mkv").write_bytes(b"x")
+        (src / "E03.mkv").write_bytes(b"x")
+        plan = Plan(
+            show=ShowRef(tmdb_id=1, title="剧", year=2022, language="zh-CN"),
+            seasons=[SeasonEntry(season=1, source=NfoSource(provider="tmdb", tmdb_id=1, season=1)),
+                     SeasonEntry(season=0, source=NfoSource(provider="tmdb", tmdb_id=1, season=0))],
+            episodes=[
+                EpisodeEntry(file=str(src / "E01.mkv"),
+                    target=FileTarget(season=1, episode=1),
+                    source=NfoSource(provider="tmdb", tmdb_id=1, season=1, episode=1)),
+                EpisodeEntry(file=str(src / "E03.mkv"),
+                    target=FileTarget(season=0, episode=1),
+                    source=NfoSource(provider="tmdb", tmdb_id=1, season=0, episode=1))],
+            warnings=[])
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=True)
+        # 两个 Season 目录
+        assert any(o.type == "mkdir" and "Season 01" in o.path for o in result.operations)
+        assert any(o.type == "mkdir" and "Season 00" in o.path for o in result.operations)
+        # E01 落 Season 01，E03 落 Season 00
+        moves = [o for o in result.operations if o.type == "move"]
+        assert any("Season 01" in o.path and "S01E01" in o.path for o in moves)
+        assert any("Season 00" in o.path and "S00E01" in o.path for o in moves)
+        # 每季一个 season nfo + tvshow nfo + 2 episode nfo
+        season_nfos = [o for o in result.nfo_operations if o.type == "season"]
+        assert sorted(s.season for s in season_nfos) == [0, 1]

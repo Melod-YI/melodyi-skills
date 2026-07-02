@@ -666,3 +666,40 @@ class TestCliNfoWorkflow:
         exec_data = json.loads(open(str(tmp_path / "exec.json"), encoding="utf-8").read())
         assert any(o["type"] == "move" for o in exec_data["operations"])
         assert exec_data["nfo_operations"] == []  # 电影无 NFO
+
+    def test_episode_group_workflow(self, tmp_path):
+        """剧集组流程：draft-plan 按 group_id 解析真实 (season, episode) 坐标"""
+        import json
+        from melodyi_filebot.models import (
+            ShowSummary, EpisodeGroupDetail, EpisodeGroupSub, EpisodeBrief)
+        (tmp_path / "E01.mkv").write_bytes(b"x")
+        (tmp_path / "E03.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 154494},
+                "folders": [{"path": str(tmp_path),
+                             "target": {"kind": "episode_group", "group_id": "g1"}}]}
+        spec_path = tmp_path / "spec.json"
+        spec_path.write_text(json.dumps(spec), encoding="utf-8")
+        group = EpisodeGroupDetail(
+            id="g1", name="制作顺序", type=6, episode_count=3, group_count=2,
+            sub_groups=[
+                EpisodeGroupSub(name="正片", episodes=[
+                    EpisodeBrief(episode_number=1, name="e1", season_number=1),
+                    EpisodeBrief(episode_number=2, name="e2", season_number=1)]),
+                EpisodeGroupSub(name="OVA", episodes=[
+                    EpisodeBrief(episode_number=1, name="ova1", season_number=0)])])
+        with patch("melodyi_filebot.cli.tmdb.get_show_summary",
+                   return_value=ShowSummary(tmdb_id=154494, title="莉可丽丝",
+                       original_title="リコリス", year=2022, total_seasons=1,
+                       total_episodes=3, seasons=[])), \
+             patch("melodyi_filebot.cli.tmdb.get_episode_group", return_value=group), \
+             patch("melodyi_filebot.cli.bangumi.get_subject_episodes", return_value=[]):
+            r = CliRunner().invoke(cli, ["draft-plan", "--folder-spec", str(spec_path),
+                                          "--out", str(tmp_path / "plan.json")])
+        assert r.exit_code == 0, r.output
+        plan = json.loads(open(str(tmp_path / "plan.json"), encoding="utf-8").read())
+        # E01 → S1E1, E03 → S0E1（跨季）
+        assert (plan["episodes"][0]["target"]["season"],
+                plan["episodes"][0]["target"]["episode"]) == (1, 1)
+        assert (plan["episodes"][1]["target"]["season"],
+                plan["episodes"][1]["target"]["episode"]) == (0, 1)
+        assert sorted(s["season"] for s in plan["seasons"]) == [0, 1]

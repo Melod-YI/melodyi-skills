@@ -127,6 +127,11 @@ melodyi-filebot generate-nfo --plan exec.json --execute
  "folders":[{"path":"D:/src/S1","target":{"kind":"season","season":1}}]}
 ```
 
+`target.kind` 三种：
+- `season`：按某季组织，`{kind:"season", season:N}`，序号→`get_season_episodes` 解析。
+- `episode_group`：按剧集组组织（重置版等跨季排列），`{kind:"episode_group", group_id:"<组ID>"}`，`draft-plan` 调 `get_episode_group` 取子组+集列表扁平化，文件序号 N→组内第 N 集的真实 `(season, episode)` 作 `source.tmdb` 坐标 + 默认 `target`（跨季则为每个真实季建 `SeasonEntry`，落对应 `Season NN/` 目录）。组 ID 由 `fetch-summary <tmdb_id> --episode-groups` 获取。重排时 agent 改 `target` 保留 `source`。
+- `movie`：见 §3.7。
+
 **Plan 集三块**：每个 episode 含 `file`（源）、`target`（展示身份：季/集，决定文件名/目录/NFO season-episode）、`source`（元数据来源：TMDB 坐标 + 可选 bangumi）。`target` 与 `source.tmdb` 可不同（物语 S00 重排：展示为 S01E05、元数据取自 S00E12，NFO 写 displayseason/displayepisode）。
 
 **字段集**：参考真实 Jellyfin NFO 样例，含 plot/title/rating/genres/tags/studio/actor/uniqueid/fileinfo streamdetails/lockdata 等（详见 `specs/2026-07-01-nfo-generation-design.md` §3）。TMDB 为主源，overview 空/<10 字用 bangumi 补；TMDB 无该季（物语）整季取 bangumi。`lockdata=true` 全锁 + TMDB 图片 URL 写入 `<art>`。
