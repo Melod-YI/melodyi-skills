@@ -188,3 +188,31 @@ class TestPlanModels:
         assert len(r.nfo_operations) == 1
         # 默认空
         assert BuildPlanResult(operations=[]).nfo_operations == []
+
+    def test_plan_media_type_movie(self):
+        from melodyi_filebot.models import Plan, ShowRef, EpisodeEntry, FileTarget, NfoSource
+        p = Plan(
+            media_type="movie",
+            show=ShowRef(tmdb_id=550, title="搏击俱乐部", year=1999, language="zh-CN"),
+            episodes=[EpisodeEntry(file="D:/x.mkv",
+                target=FileTarget(season=None, episode=None),  # 电影无季集
+                source=NfoSource(provider="tmdb", tmdb_id=550))],
+        )
+        assert p.media_type == "movie"
+        assert p.episodes[0].target.season is None
+        assert p.episodes[0].target.episode is None
+
+    def test_plan_media_type_default_tv(self):
+        from melodyi_filebot.models import Plan, ShowRef, EpisodeEntry, FileTarget, NfoSource
+        p = Plan(
+            show=ShowRef(tmdb_id=154494, title="莉可丽丝", language="zh-CN"),
+            episodes=[EpisodeEntry(file="D:/x.mkv",
+                target=FileTarget(season=1, episode=1),
+                source=NfoSource(provider="tmdb", tmdb_id=154494, season=1, episode=1))],
+        )
+        assert p.media_type == "tv"
+
+    def test_file_target_season_episode_optional(self):
+        from melodyi_filebot.models import FileTarget
+        t = FileTarget()  # 全默认
+        assert t.season is None and t.episode is None

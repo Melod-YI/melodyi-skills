@@ -206,8 +206,9 @@ class PathAnalysis(BaseModel):
 
 class FileTarget(BaseModel):
     """集的展示身份（决定文件名/目录/NFO season-episode 字段）"""
-    season: int
-    episode: int
+
+    season: Optional[int] = None  # 电影无季；TV 传值
+    episode: Optional[int] = None  # 电影无集；TV 传值
     episode_end: Optional[int] = None
     part: Optional[int] = None
 
@@ -247,6 +248,8 @@ class ShowRef(BaseModel):
 
 class Plan(BaseModel):
     """纯映射 Plan（agent 编辑对象）"""
+
+    media_type: str = "tv"  # "tv" | "movie"
     show: ShowRef
     seasons: List[SeasonEntry] = Field(default_factory=list)
     episodes: List[EpisodeEntry] = Field(default_factory=list)
