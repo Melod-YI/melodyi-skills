@@ -239,3 +239,50 @@ melodyi-filebot generate-nfo --plan exec.json --execute
 - `lockedfields` 字段级锁（当前用 `lockdata=true` 全锁；字段级锁留后）。
 - 多图像/季封面自定义选择（当前每类取第一个）。
 - NFO 内容字段进 Plan（违背「不进上下文」原则，不做）。
+
+## 11. 电影重命名扩展（方案1，2026-07-02 增补）
+
+P2 迁移（§9）删除了 P0 的电影重命名能力（`build-plan --movie-id`/`draft-map --movie-id`/`build_plan_movie*`）。本节补回电影重命名与目录整理（**不含电影 NFO**，NFO 仍 §10 留后），统一到 Plan 流程。
+
+### 11.1 模型改动（`models.py`）
+
+- `Plan` 加 `media_type: str = "tv"`（`"tv"` | `"movie"`）。
+- `FileTarget.season` / `episode` 改为 `Optional[int] = None`（电影无季集；TV 仍传值，向后兼容，既有 TV 测试不受影响）。
+- `ShowRef` 兼容电影（`tmdb_id` + `title` + `year` + `bangumi_subject_id` 不变）。
+- `EpisodeEntry` 不变（file + target + source）；电影项 `target.season/episode=None`，`source = {provider:"tmdb", tmdb_id: <电影id>}`（无 season/episode）。
+
+### 11.2 `draft-plan` 支持 `target.kind=movie`
+
+folder-spec：
+```json
+{"show":{"tmdb_id":<电影id>},
+ "folders":[{"path":"D:/src/movie","target":{"kind":"movie"}}]}
+```
+- 扫视频，全部作为 `episodes`（`target.season/episode=None`，`source={tmdb 电影id}`）。
+- `Plan.media_type="movie"`。
+- 调 `tmdb.get_movie_summary` 取 title/year 构造 `ShowRef`（电影复用 ShowRef）。
+- 不调 TMDB 季集；bangumi subject 可选（电影 bangumi 留后）。
+
+### 11.3 `build_plan_from_plan` 电影分支（`media_type=="movie"`）
+
+- 建电影文件夹 `电影名 (年) [tmdbid-xxx]`（复用 `_show_folder` 命名）。
+- `episodes[0]` 为正片 → move 到 `电影名 (年).ext` + 伴生改名（复用 `_companion_ops`）。
+- `episodes[1:]` → warning「电影存在多个视频文件，已忽略」（P0 行为）。
+- **不生成 nfo 操作**（movie NFO 留后；`--with-nfo` 对 movie 暂无效）。
+- 无 Season 子目录。
+- `spec_applied="plan"`。
+
+### 11.4 CLI
+
+无新命令。`draft-plan --folder-spec`（folder target.kind=movie）→ `build-plan --plan`（按 `media_type` 分支）→ `execute-plan`。`generate-nfo` 对 movie 执行清单无 nfo 操作（输出「执行清单无 nfo 操作」）。
+
+### 11.5 测试
+
+- `draft_plan` movie kind → `Plan.media_type="movie"`，`target.season/episode=None`，`source.tmdb_id` 为电影 id。
+- `build_plan_from_plan` movie → 电影文件夹 + 正片 move，**无 nfo 操作**，无 Season 子目录。
+- 多文件电影 → 第一个正片，其余 warning。
+- CLI movie 流程（draft-plan → build-plan → execute-plan dry-run）。
+
+### 11.6 不改
+
+`execute-plan`/`undo`（通用 move）、`get_movie_summary`（终于有消费方）、伴生改名逻辑（复用）。电影 NFO（`movie.nfo`）仍 §10 留后。

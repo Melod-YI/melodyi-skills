@@ -1717,7 +1717,142 @@ git commit -m "test(melodyi-filebot): NFO 真实集成测试 + SKILL.md 更新"
 
 **类型一致性**：`NfoSource`/`NfoOperation`/`Plan`/`EpisodeEntry` 在 Task 1 定义，Task 7/8/9/10 使用一致。`build_plan_from_plan` 用 `ShowRef` 构造 `ShowSummary` 复用 `_show_folder`/`_episode_filename`，签名一致。
 
-**Placeholder 扫描**：无 TBD/TODO；Task 11 的迁移步骤是「评估并改写」，具体改写依赖当时失败测试，属正常迁移流程（非占位符）。
+**Placeholder 扫描**无 TBD/TODO；Task 11 的迁移步骤是「评估并改写」，具体改写依赖当时失败测试，属正常迁移流程（非占位符）。
+
+---
+
+## Phase 2.5：电影重命名扩展（方案1，2026-07-02 增补）
+
+P2 迁移删了 P0 的电影重命名能力。本阶段补回，统一到 Plan 流程。设计见 `2026-07-01-nfo-generation-design.md` §11。**不含电影 NFO**（留后）。
+
+### Task 13: Plan 模型支持电影
+
+**Files:** `melodyi_filebot/models.py`, `tests/test_models.py`
+
+- [ ] **Step 1: 写失败测试**（追加到 `TestPlanModels`）：
+```python
+def test_plan_media_type_movie(self):
+    from melodyi_filebot.models import Plan, ShowRef, EpisodeEntry, FileTarget, NfoSource
+    p = Plan(
+        media_type="movie",
+        show=ShowRef(tmdb_id=550, title="搏击俱乐部", year=1999, language="zh-CN"),
+        episodes=[EpisodeEntry(file="D:/x.mkv",
+            target=FileTarget(season=None, episode=None),  # 电影无季集
+            source=NfoSource(provider="tmdb", tmdb_id=550))],
+    )
+    assert p.media_type == "movie"
+    assert p.episodes[0].target.season is None
+    assert p.episodes[0].target.episode is None
+
+def test_file_target_season_episode_optional(self):
+    from melodyi_filebot.models import FileTarget
+    t = FileTarget()  # 全默认
+    assert t.season is None and t.episode is None
+```
+- [ ] **Step 2: 验证 red**：`python -m pytest tests/test_models.py::TestPlanModels -v` → FAIL。
+- [ ] **Step 3: 实现**：`Plan` 加 `media_type: str = "tv"`；`FileTarget.season`/`episode` 改 `Optional[int] = None`（原为必填 `int`）。注意：改 `FileTarget` 字段为 Optional 后，既有 TV 测试（`FileTarget(season=1, episode=1)`）仍通过。
+- [ ] **Step 4: 验证 green** + 全量 `python -m pytest 2>&1 | tail -3`（expect 179 pass + 11 skip，0 fail——既有 TV 测试不受影响）。
+- [ ] **Step 5: 提交**：`git add packages/melodyi-filebot/melodyi_filebot/models.py packages/melodyi-filebot/tests/test_models.py && git commit -m "feat(melodyi-filebot): Plan 支持 media_type=movie + FileTarget 季集可选"`
+
+### Task 14: draft-plan + build_plan_from_plan 电影分支
+
+**Files:** `melodyi_filebot/planner.py`, `tests/test_planner.py`
+
+- [ ] **Step 1: 写失败测试**（追加到 `TestDraftPlan` 与 `TestBuildPlanFromPlan`）：
+```python
+# TestDraftPlan
+def test_movie_target_kind(self, tmp_path):
+    from melodyi_filebot import planner
+    from melodyi_filebot.models import CandidateSummary
+    (tmp_path / "movie.mkv").write_bytes(b"x")
+    (tmp_path / "extra.mkv").write_bytes(b"x")
+    spec = {"show": {"tmdb_id": 550},
+            "folders": [{"path": str(tmp_path), "target": {"kind": "movie"}}]}
+    movie = CandidateSummary(tmdb_id=550, title="搏击俱乐部", original_title="Fight Club",
+                             year=1999, overview_length=50, media_type="movie")
+    plan = planner.draft_plan(spec, language="zh-CN",
+        fetch_show_summary=lambda tid, language="zh-CN": movie,  # 电影复用此入口（get_movie_summary）
+        fetch_season_episodes=lambda tid, sn, language="zh-CN": [],
+        fetch_bangumi_episodes=lambda sid, ep_type=0: [])
+    assert plan.media_type == "movie"
+    assert len(plan.episodes) == 2  # 两个视频都进 episodes
+    assert all(e.target.season is None and e.target.episode is None for e in plan.episodes)
+    assert all(e.source.tmdb_id == 550 for e in plan.episodes)
+
+# TestBuildPlanFromPlan
+def _movie_plan(self, tmp_path):
+    from melodyi_filebot.models import Plan, ShowRef, EpisodeEntry, FileTarget, NfoSource
+    src = tmp_path / "src"; src.mkdir()
+    (src / "movie.mkv").write_bytes(b"x")
+    return Plan(media_type="movie",
+        show=ShowRef(tmdb_id=550, title="搏击俱乐部", year=1999, language="zh-CN"),
+        episodes=[EpisodeEntry(file=str(src/"movie.mkv"),
+            target=FileTarget(season=None, episode=None),
+            source=NfoSource(provider="tmdb", tmdb_id=550))],
+        warnings=[])
+
+def test_build_plan_movie(self, tmp_path):
+    from melodyi_filebot import planner
+    plan = self._movie_plan(tmp_path)
+    result = planner.build_plan_from_plan(plan, str(tmp_path/"dest"), with_nfo=True)
+    # 电影文件夹 + 正片 move，无 Season 子目录
+    assert any(o.type=="mkdir" and "tmdbid-550" in o.path for o in result.operations)
+    assert not any("Season" in o.path for o in result.operations)  # 无季目录
+    assert any(o.type=="move" and "搏击俱乐部 (1999).mkv" in o.path for o in result.operations)
+    assert result.nfo_operations == []  # 电影无 NFO
+
+def test_build_plan_movie_multi_file_warning(self, tmp_path):
+    from melodyi_filebot import planner
+    from melodyi_filebot.models import EpisodeEntry, FileTarget, NfoSource
+    plan = self._movie_plan(tmp_path)
+    (tmp_path/"src"/"extra.mkv").write_bytes(b"x")
+    plan.episodes.append(EpisodeEntry(file=str(tmp_path/"src"/"extra.mkv"),
+        target=FileTarget(season=None, episode=None),
+        source=NfoSource(provider="tmdb", tmdb_id=550)))
+    result = planner.build_plan_from_plan(plan, str(tmp_path/"dest"), with_nfo=False)
+    assert any("多个视频文件" in w for w in result.warnings)
+    assert sum(1 for o in result.operations if o.type=="move") == 1  # 只正片 move
+```
+- [ ] **Step 2: 验证 red**。
+- [ ] **Step 3: 实现**：
+  - `draft_plan`：`target.kind=="movie"` 分支 → `media_type="movie"`，扫全部视频作 episodes（target season/episode=None，source={tmdb_id}），`ShowRef` 从 `fetch_show_summary`（电影时即 `get_movie_summary` 返回 CandidateSummary——需在 draft_plan 里兼容 CandidateSummary 与 ShowSummary：两者都有 tmdb_id/title/original_title/year；ShowRef 构造用 getattr 兜底）。不调 `fetch_season_episodes`。
+  - `build_plan_from_plan`：开头判断 `plan.media_type=="movie"` → 电影分支：建电影文件夹（`_show_folder(show)`），`episodes[0]` 正片 move 到 `_sanitize(f"{show.title}{year}") + ext`，伴生改名，`episodes[1:]` warning，**无 nfo 操作**，return。
+- [ ] **Step 4: 验证 green** + 全量。
+- [ ] **Step 5: 提交**：`git add packages/melodyi-filebot/melodyi_filebot/planner.py packages/melodyi-filebot/tests/test_planner.py && git commit -m "feat(melodyi-filebot): draft-plan/build-plan 电影分支（重命名+整理，无 NFO）"`
+
+### Task 15: CLI 电影流程 + SKILL.md
+
+**Files:** `tests/test_cli.py`, `skills/melodyi-filebot/SKILL.md`
+
+- [ ] **Step 1: 写失败测试**（`TestCliNfoWorkflow`）：
+```python
+def test_movie_workflow(self, tmp_path):
+    import json
+    from melodyi_filebot.models import CandidateSummary
+    (tmp_path/"movie.mkv").write_bytes(b"x")
+    spec = {"show":{"tmdb_id":550},"folders":[{"path":str(tmp_path),"target":{"kind":"movie"}}]}
+    spec_path = tmp_path/"spec.json"; spec_path.write_text(json.dumps(spec), encoding="utf-8")
+    with patch("melodyi_filebot.cli.tmdb.get_show_summary",
+               return_value=CandidateSummary(tmdb_id=550, title="搏击俱乐部",
+                   original_title="Fight Club", year=1999, overview_length=50, media_type="movie")):
+        r1 = CliRunner().invoke(cli, ["draft-plan","--folder-spec",str(spec_path),"--out",str(tmp_path/"plan.json")])
+    assert r1.exit_code==0, r1.output
+    plan=json.loads(open(str(tmp_path/"plan.json"),encoding="utf-8").read())
+    assert plan["media_type"]=="movie"
+    r2=CliRunner().invoke(cli,["build-plan","--plan",str(tmp_path/"plan.json"),"--dest",str(tmp_path/"dest"),"--with-nfo","--out",str(tmp_path/"exec.json")])
+    assert r2.exit_code==0, r2.output
+    exec_data=json.loads(open(str(tmp_path/"exec.json"),encoding="utf-8").read())
+    assert any(o["type"]=="move" for o in exec_data["operations"])
+    assert exec_data["nfo_operations"]==[]  # 电影无 NFO
+```
+- [ ] **Step 2: 验证 red**。
+- [ ] **Step 3: 实现**：CLI `draft-plan`/`build-plan` 已通用（按 Plan.media_type 分支在 planner 层），无需改 CLI 代码——测试应直接通过（除非 draft_plan 的 CandidateSummary 兼容有问题，则修 planner）。SKILL.md §3.6 加电影示例：
+```markdown
+**电影**（`target.kind=movie`）：folder-spec `{"show":{"tmdb_id":<电影id>},"folders":[{"path":"...","target":{"kind":"movie"}}]}`，`draft-plan` → `build-plan` → `execute-plan`，输出 `Movies/电影名 (年) [tmdbid-xxx]/电影名 (年).ext`。电影 NFO 留后。
+```
+并更新 SKILL.md frontmatter description（去 TV-only，加回电影）：`用于剧集、动画番剧与电影的批量重命名、目录整理与 NFO 生成`（电影目前仅重命名，NFO 留后——在 §3.6 注明）。
+- [ ] **Step 4: 验证 green** + 全量 + 真实 bangumi 集成（不涉及）。
+- [ ] **Step 5: 提交**：`git add packages/melodyi-filebot/tests/test_cli.py skills/melodyi-filebot/SKILL.md && git commit -m "test(melodyi-filebot): CLI 电影流程 + SKILL.md 电影示例"`
 
 ---
 
