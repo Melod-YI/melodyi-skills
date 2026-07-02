@@ -639,3 +639,30 @@ class TestCliNfoWorkflow:
             result = runner.invoke(cli, ["generate-nfo", "--plan", str(exec_path), "--execute"])
         assert result.exit_code != 0  # 部分失败 → 非 0
         assert "1 个 nfo 操作失败" in result.output or "失败" in result.output
+
+    def test_movie_workflow(self, tmp_path):
+        """电影流程：draft-plan → build-plan，media_type=movie，无 nfo 操作"""
+        import json
+        from melodyi_filebot.models import CandidateSummary
+        (tmp_path / "movie.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 550},
+                "folders": [{"path": str(tmp_path), "target": {"kind": "movie"}}]}
+        spec_path = tmp_path / "spec.json"
+        spec_path.write_text(json.dumps(spec), encoding="utf-8")
+        with patch("melodyi_filebot.cli.tmdb.get_movie_summary",
+                   return_value=CandidateSummary(tmdb_id=550, title="搏击俱乐部",
+                       original_title="Fight Club", year=1999, overview_length=50,
+                       media_type="movie")):
+            r1 = CliRunner().invoke(cli, ["draft-plan", "--folder-spec", str(spec_path),
+                                          "--out", str(tmp_path / "plan.json")])
+        assert r1.exit_code == 0, r1.output
+        plan = json.loads(open(str(tmp_path / "plan.json"), encoding="utf-8").read())
+        assert plan["media_type"] == "movie"
+        assert len(plan["episodes"]) == 1
+        r2 = CliRunner().invoke(cli, ["build-plan", "--plan", str(tmp_path / "plan.json"),
+                                      "--dest", str(tmp_path / "dest"), "--with-nfo",
+                                      "--out", str(tmp_path / "exec.json")])
+        assert r2.exit_code == 0, r2.output
+        exec_data = json.loads(open(str(tmp_path / "exec.json"), encoding="utf-8").read())
+        assert any(o["type"] == "move" for o in exec_data["operations"])
+        assert exec_data["nfo_operations"] == []  # 电影无 NFO

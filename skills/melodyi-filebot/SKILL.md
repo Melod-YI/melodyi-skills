@@ -1,11 +1,11 @@
 ---
 name: melodyi-filebot
-description: 用于剧集、动画番剧的批量重命名、目录整理与 NFO 生成，输出符合 Jellyfin 规范的结构。当用户需要整理影视文件、重命名剧集、为 Jellyfin 准备媒体库时使用。
+description: 用于剧集、动画番剧与电影的批量重命名、目录整理与 NFO 生成，输出符合 Jellyfin 规范的结构。当用户需要整理影视文件、重命名剧集/电影、为 Jellyfin 准备媒体库时使用。
 ---
 
 # melodyi-filebot
 
-基于 TMDB 数据，对电影/剧集/番剧做批量重命名与目录整理，输出 Jellyfin 可直接识别的结构。**当前阶段：重命名与目录整理（P0）已完成；Bangumi 数据查询（P1）与 NFO 生成（P2，仅 TV）已就绪**（电影 NFO 与电影重命名留后）。
+基于 TMDB 数据，对电影/剧集/番剧做批量重命名与目录整理，输出 Jellyfin 可直接识别的结构。**当前阶段：重命名与目录整理（P0）已完成；Bangumi 数据查询（P1）与 TV NFO 生成（P2）已就绪；电影重命名已支持（电影 NFO 留后）**。
 
 ## 工作流程
 
@@ -131,7 +131,32 @@ melodyi-filebot generate-nfo --plan exec.json --execute
 
 **字段集**：参考真实 Jellyfin NFO 样例，含 plot/title/rating/genres/tags/studio/actor/uniqueid/fileinfo streamdetails/lockdata 等（详见 `specs/2026-07-01-nfo-generation-design.md` §3）。TMDB 为主源，overview 空/<10 字用 bangumi 补；TMDB 无该季（物语）整季取 bangumi。`lockdata=true` 全锁 + TMDB 图片 URL 写入 `<art>`。
 
-> 注：P2 当前仅 TV（tvshow/season/episode NFO）。电影 NFO 与电影重命名留后。
+> 注：P2 当前仅 TV（tvshow/season/episode NFO）。电影 NFO 留后；电影重命名见 §3.7。
+
+### 3.7 电影重命名与目录整理
+
+电影走与 TV 一致的 Plan 流程，folder 的 `target.kind` 设为 `movie`：
+
+```bash
+# folder→target 清单 → Plan（调 get_movie_summary 取片名/年份）
+melodyi-filebot draft-plan --folder-spec folders.json --out plan.json
+
+# Plan → 执行清单（电影无 nfo 操作，--with-nfo 对电影无效）
+melodyi-filebot build-plan --plan plan.json --dest <dest> --out exec.json
+
+# 执行移动
+melodyi-filebot execute-plan --plan exec.json --execute
+```
+
+`folders.json` 结构：
+```json
+{"show":{"tmdb_id":550},
+ "folders":[{"path":"D:/src/movie","target":{"kind":"movie"}}]}
+```
+
+- `draft-plan` 扫 folder 下全部视频作 episodes（`target.season/episode=null`，`source={tmdb_id: 电影id}`），`media_type="movie"`。
+- `build-plan` 建电影文件夹 `Movies/电影名 (年) [tmdbid-xxx]/`，`episodes[0]` 为正片 move 到 `电影名 (年).ext`（伴生字幕随改名），`episodes[1:]` 告警「电影存在多个视频文件，已忽略」。**无 Season 子目录、无 NFO**。
+- `generate-nfo` 对电影执行清单无 nfo 操作（输出「执行清单无 nfo 操作」）。电影 NFO（`movie.nfo`）留后。
 
 ### 4. 执行（默认 dry-run，必留事务日志）
 
