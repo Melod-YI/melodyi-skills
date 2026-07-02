@@ -21,11 +21,16 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 @pytest.fixture(scope="session")
 def gundam_fixture() -> Path:
-    """高达SEED 重制版 fixture 目录"""
+    """高达SEED 重制版 fixture 顶层目录（含 manifest.json + 源目录名一层）"""
     p = FIXTURES_DIR / "gundam-seed-hd"
     if not p.is_dir():
         pytest.skip(f"fixture 未生成: {p}（用 scripts/gen-fixtures.py 生成）")
     return p
+
+
+def _case_root(fixture_dir: Path) -> Path:
+    """fixture 下的用例根目录（源目录名那一层，manifest.json 之外的唯一子目录）"""
+    return next(p for p in fixture_dir.iterdir() if p.is_dir())
 
 
 def test_gundam_manifest_matches_filesystem(gundam_fixture):
@@ -35,9 +40,11 @@ def test_gundam_manifest_matches_filesystem(gundam_fixture):
     assert len(manifest["videos"]) == 98
     assert len(manifest["companions"]) == 98
     assert manifest["skipped"] == []
-    # 每个视频文件确实存在
+    case_root = _case_root(gundam_fixture)
+    assert case_root.name == manifest["case_root"]  # 源目录名一层
+    # 每个视频文件确实存在（rel 相对源目录根）
     for v in manifest["videos"]:
-        assert (gundam_fixture / v["rel"]).is_file()
+        assert (case_root / v["rel"]).is_file()
     # 抽样时长合理（~24 分钟）
     assert 1300 < manifest["videos"][0]["duration_seconds"] < 1500
 
@@ -49,8 +56,9 @@ def test_gundam_analyze_real_ffprobe(gundam_fixture, tmp_path):
     隔离使用，跑完即弃。
     """
     # copytree Season 1 到一次性目录（48 视频 + 48 字幕，~2.5MB）
+    src_season = _case_root(gundam_fixture) / "Season 1"
     dst = tmp_path / "Season 1"
-    shutil.copytree(gundam_fixture / "Season 1", dst)
+    shutil.copytree(src_season, dst)
 
     result = structure.analyze_path(str(dst))  # 默认真实 ffprobe
     assert result.truncated is False

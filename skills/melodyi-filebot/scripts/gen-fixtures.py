@@ -19,7 +19,9 @@
       "D:/download/机动战士高达seed+seed destiny  重制版 1080P" \\
       --name gundam-seed-hd
 
-默认输出到 packages/melodyi-filebot/tests/fixtures/<name>/。
+默认输出到 packages/melodyi-filebot/tests/fixtures/<name>/，结构为
+  <name>/<源目录名>/<...原目录结构>  （保留源目录名这一层，与用户输入路径一致）
+  <name>/manifest.json                 （不进用例目录，避免干扰）
 
 依赖：ffprobe / ffmpeg（已在 PATH），melodyi_filebot 包（pip install -e）。
 """
@@ -74,18 +76,22 @@ def _copy_file(src: Path, dst: Path) -> int:
 
 
 def generate_fixture(src_dir: Path, out_dir: Path) -> dict:
-    """扫描 src_dir，在 out_dir 复刻结构（视频极小化，其余原样复制）。
+    """扫描 src_dir，在 out_dir/<源目录名>/ 复刻结构（视频极小化，其余原样复制）。
+
+    内容放在 out_dir/<源目录名>/ 下，保留源目录名这一层（与用户输入路径一致）；
+    manifest.json 由调用方写在 out_dir/manifest.json，不进用例目录，避免干扰。
 
     Returns:
-        manifest dict：{videos: [{rel, duration_seconds, size_bytes}], companions: [...], skipped: [...]}
+        manifest dict：{case_root, videos: [...], companions: [...], skipped: [...]}
     """
     src_dir = src_dir.resolve()
-    manifest = {"videos": [], "companions": [], "skipped": []}
+    case_root = out_dir / src_dir.name
+    manifest = {"case_root": src_dir.name, "videos": [], "companions": [], "skipped": []}
     files = sorted(p for p in src_dir.rglob("*") if p.is_file())
     total = len(files)
     for i, src in enumerate(files, 1):
         rel = src.relative_to(src_dir).as_posix()
-        dst = out_dir / rel
+        dst = case_root / rel
         ext = src.suffix.lower()
         if ext in VIDEO_EXTS:
             secs = probe_duration_ffmpeg(src)

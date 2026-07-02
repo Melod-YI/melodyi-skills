@@ -18,7 +18,7 @@
 python skills/melodyi-filebot/scripts/gen-fixtures.py <源目录> --name <用例名> [--overwrite]
 ```
 
-默认输出到 `packages/melodyi-filebot/tests/fixtures/<用例名>/`，并写 `manifest.json`（记录每个视频的相对路径、真实时长、生成体积）。
+默认输出到 `packages/melodyi-filebot/tests/fixtures/<用例名>/<源目录名>/`（保留源目录名这一层，与用户输入路径一致），`manifest.json` 写在 `<用例名>/manifest.json`（不进用例目录，避免干扰），记录每个视频的相对路径、真实时长、生成体积。
 
 示例（高达SEED 重制版）：
 
