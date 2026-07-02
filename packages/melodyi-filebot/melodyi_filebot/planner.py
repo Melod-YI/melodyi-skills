@@ -122,6 +122,12 @@ def _season_folder(season_number: int) -> str:
     return f"Season {season_number:02d}"
 
 
+def _movie_filename(show: ShowSummary, ext: str) -> str:
+    """电影正片文件名：电影名 (年).ext"""
+    year = f" ({show.year})" if show.year else ""
+    return _sanitize(f"{show.title}{year}") + ext
+
+
 def _episode_filename(
     show: ShowSummary, season: int, episode: int, episode_end: Optional[int], part: Optional[int], ext: str
 ) -> str:
@@ -173,14 +179,15 @@ def draft_plan(
     fetch_show_summary=None,
     fetch_season_episodes=None,
     fetch_bangumi_episodes=None,
+    fetch_movie_summary=None,
 ) -> "Plan":
     """folder→target 输入 → Plan（调 API 解析来源）
 
     Args:
         folder_spec: {show: {tmdb_id, bangumi_subject_id?}, folders: [{path, target, bangumi_subject_id?}]}
         language: 语言
-        fetch_*: 可注入的 fetch 函数（单测用）；默认接 tmdb/bangumi 模块
-
+        fetch_*: 可注入的 fetch 函数（单测用）；默认接 tmdb/bangumi 模块。
+            电影 folder（target.kind=movie）走 fetch_movie_summary（默认 tmdb.get_movie_summary）。
     Returns:
         Plan（纯映射，含来源 spec 与 warnings）
     """
@@ -196,11 +203,44 @@ def draft_plan(
     if fetch_bangumi_episodes is None:
         from melodyi_filebot import bangumi as _bg
         fetch_bangumi_episodes = _bg.get_subject_episodes
+    if fetch_movie_summary is None:
+        from melodyi_filebot import tmdb as _tmdb
+        fetch_movie_summary = _tmdb.get_movie_summary
 
     logger.info("draft_plan 开始: folder_spec=%s, language=%s", folder_spec, language)
     show_spec = folder_spec["show"]
     tmdb_id = show_spec["tmdb_id"]
     show_bg = show_spec.get("bangumi_subject_id")
+
+    # 检测是否含电影 folder（一个 folder 即决定整 Plan 的 media_type）
+    folders = folder_spec["folders"]
+    has_movie = any(f.get("target", {}).get("kind") == "movie" for f in folders)
+    if has_movie:
+        # 电影分支：调 get_movie_summary 取 title/year，扫全部视频作 episodes，无季集
+        movie = fetch_movie_summary(tmdb_id, language=language)
+        show_ref = ShowRef(
+            tmdb_id=tmdb_id, bangumi_subject_id=show_bg,
+            title=getattr(movie, "title", "") or "",
+            original_title=getattr(movie, "original_title", "") or "",
+            year=getattr(movie, "year", None),
+            language=language,
+        )
+        episodes: list = []
+        warnings: list = []
+        for folder in folders:
+            folder_path = Path(folder["path"])
+            files = [str(p) for p in sorted(folder_path.iterdir())
+                     if p.suffix.lower() in VIDEO_EXTS] if folder_path.is_dir() else []
+            for f in files:
+                episodes.append(EpisodeEntry(
+                    file=os.path.normpath(f),
+                    target=FileTarget(season=None, episode=None),
+                    source=NfoSource(provider="tmdb", tmdb_id=tmdb_id),
+                ))
+        logger.info("draft_plan 电影分支完成: 视频数=%d, 警告数=%d",
+                    len(episodes), len(warnings))
+        return Plan(media_type="movie", show=show_ref, episodes=episodes, warnings=warnings)
+
     show = fetch_show_summary(tmdb_id, language=language)
     show_ref = ShowRef(
         tmdb_id=tmdb_id, bangumi_subject_id=show_bg,
@@ -319,6 +359,30 @@ def build_plan_from_plan(plan: "Plan", dest_root: str, with_nfo: bool = True) ->
     )
     dest_root = os.path.normpath(dest_root)
     show_dir = os.path.join(dest_root, _show_folder(show))
+
+    # 电影分支：电影文件夹 + 正片 move，无 Season 子目录，无 NFO
+    if plan.media_type == "movie":
+        operations: List[PlanOperation] = [PlanOperation(type="mkdir", path=show_dir)]
+        warnings: list = list(plan.warnings)
+        if not plan.episodes:
+            logger.warning("电影 Plan 无视频文件")
+            return BuildPlanResult(operations=operations, nfo_operations=[],
+                                   spec_applied="plan", warnings=warnings)
+        # 多余视频文件告警（仅第一个为正片）
+        for extra in plan.episodes[1:]:
+            msg = f"电影存在多个视频文件，已忽略: {extra.file}"
+            warnings.append(msg)
+            logger.warning(msg)
+        m = plan.episodes[0]
+        ext = Path(m.file).suffix
+        target_name = _movie_filename(show, ext)
+        target = os.path.join(show_dir, target_name)
+        operations.append(PlanOperation(type="move", source=os.path.normpath(m.file), path=target))
+        operations.extend(_companion_ops(m.file, target, target_name))
+        logger.info("电影执行清单完成: 操作数=%d", len(operations))
+        return BuildPlanResult(operations=operations, nfo_operations=[],
+                               spec_applied="plan", warnings=warnings)
+
     operations: List[PlanOperation] = [PlanOperation(type="mkdir", path=show_dir)]
     nfo_operations: list = []
     warnings: list = list(plan.warnings)

@@ -185,6 +185,27 @@ class TestDraftPlan:
                    for e in plan.episodes)
         assert any("无 bangumi 来源" in w for w in plan.warnings)
 
+    def test_movie_target_kind(self, tmp_path):
+        """电影 folder（target.kind=movie）→ Plan.media_type=movie，全部视频作 episodes"""
+        from melodyi_filebot import planner
+        from melodyi_filebot.models import CandidateSummary
+        (tmp_path / "movie.mkv").write_bytes(b"x")
+        (tmp_path / "extra.mkv").write_bytes(b"x")
+        spec = {"show": {"tmdb_id": 550},
+                "folders": [{"path": str(tmp_path), "target": {"kind": "movie"}}]}
+        movie = CandidateSummary(tmdb_id=550, title="搏击俱乐部", original_title="Fight Club",
+                                 year=1999, overview_length=50, media_type="movie")
+        plan = planner.draft_plan(
+            spec, language="zh-CN",
+            fetch_movie_summary=lambda tid, language="zh-CN": movie,
+            fetch_show_summary=lambda tid, language="zh-CN": movie,  # 电影不应走此分支
+            fetch_season_episodes=lambda tid, sn, language="zh-CN": [],
+            fetch_bangumi_episodes=lambda sid, ep_type=0: [])
+        assert plan.media_type == "movie"
+        assert len(plan.episodes) == 2  # 两个视频都进 episodes
+        assert all(e.target.season is None and e.target.episode is None for e in plan.episodes)
+        assert all(e.source.tmdb_id == 550 for e in plan.episodes)
+
 
 class TestBuildPlanFromPlan:
     """build_plan_from_plan: Plan → BuildPlanResult（move + nfo 操作）"""
@@ -307,3 +328,63 @@ class TestBuildPlanFromPlan:
         # 只有视频 move，无伴生（-extra.ass 不算伴生）
         assert len(moves) == 1
         assert moves[0].source.endswith(".mkv")
+
+    def _movie_plan(self, tmp_path):
+        from melodyi_filebot.models import (
+            Plan, ShowRef, EpisodeEntry, FileTarget, NfoSource)
+        src = tmp_path / "src"; src.mkdir()
+        (src / "movie.mkv").write_bytes(b"x")
+        return Plan(
+            media_type="movie",
+            show=ShowRef(tmdb_id=550, title="搏击俱乐部", year=1999, language="zh-CN"),
+            episodes=[EpisodeEntry(file=str(src / "movie.mkv"),
+                target=FileTarget(season=None, episode=None),
+                source=NfoSource(provider="tmdb", tmdb_id=550))],
+            warnings=[])
+
+    def test_build_plan_movie(self, tmp_path):
+        """电影分支：电影文件夹 + 正片 move，无 Season 子目录，无 nfo 操作"""
+        from melodyi_filebot import planner
+        plan = self._movie_plan(tmp_path)
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=True)
+        # 电影文件夹
+        assert any(o.type == "mkdir" and "tmdbid-550" in o.path for o in result.operations)
+        # 无 Season 子目录
+        assert not any("Season" in o.path for o in result.operations)
+        # 正片 move 到「电影名 (年).ext」
+        assert any(o.type == "move" and "搏击俱乐部 (1999).mkv" in o.path for o in result.operations)
+        # 电影无 NFO
+        assert result.nfo_operations == []
+
+    def test_build_plan_movie_multi_file_warning(self, tmp_path):
+        """电影多视频文件：第一个正片 move，其余 warning，只 move 一个"""
+        from melodyi_filebot import planner
+        from melodyi_filebot.models import EpisodeEntry, FileTarget, NfoSource
+        plan = self._movie_plan(tmp_path)
+        (tmp_path / "src" / "extra.mkv").write_bytes(b"x")
+        plan.episodes.append(EpisodeEntry(file=str(tmp_path / "src" / "extra.mkv"),
+            target=FileTarget(season=None, episode=None),
+            source=NfoSource(provider="tmdb", tmdb_id=550)))
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=False)
+        assert any("多个视频文件" in w for w in result.warnings)
+        assert sum(1 for o in result.operations if o.type == "move") == 1  # 只正片 move
+
+    def test_build_plan_movie_companion_rename(self, tmp_path):
+        """电影正片改名，伴生字幕随改名"""
+        from melodyi_filebot import planner
+        from melodyi_filebot.models import (
+            Plan, ShowRef, EpisodeEntry, FileTarget, NfoSource)
+        src = tmp_path / "src"; src.mkdir()
+        video = src / "movie.mkv"; video.write_bytes(b"x")
+        sub = src / "movie.zh.ass"; sub.write_bytes(b"x")
+        plan = Plan(
+            media_type="movie",
+            show=ShowRef(tmdb_id=550, title="搏击俱乐部", year=1999, language="zh-CN"),
+            episodes=[EpisodeEntry(file=str(video),
+                target=FileTarget(season=None, episode=None),
+                source=NfoSource(provider="tmdb", tmdb_id=550))],
+            warnings=[])
+        result = planner.build_plan_from_plan(plan, str(tmp_path / "dest"), with_nfo=False)
+        moves = [o for o in result.operations if o.type == "move"]
+        sub_move = next(o for o in moves if o.source.endswith(".ass"))
+        assert sub_move.path.endswith("搏击俱乐部 (1999).zh.ass")
