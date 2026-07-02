@@ -11,7 +11,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **melodyi-skills** 是一个 Claude Code Agent Skills 的 monorepo——每个 skill 是一个自包含的工具，用于扩展 Claude Code 的能力。大部分 skill 是标准化的，仅含 `SKILL.md`（skill 定义/Claude 运行时读取的指令）以及可选的 `CLAUDE.md`（开发指南）；少数 skill 携带大量代码、需安装为 CLI 后执行，这类代码作为独立包放在 `packages/` 下，对应的 `SKILL.md` 则作为轻量 skill 放在 `skills/` 下，通过命令名调用已安装的 CLI。
 
-Skills 通过 `sync-skills.sh` 同步到 **仓库同级目录** `../skill-workspace/`，将每个 skill 复制到 `../skill-workspace/<name>-workspace/.claude/skills/<name>/`。主要目的是在受控的、隔离于源码仓库的环境下验证对应 skill 的功能。`packages/` 下的 CLI 包不在 `sync-skills.sh` 同步范围内，需单独安装（见下文「常用命令」）。
+Skills 通过 `scripts/sync_skills.py` 同步到隔离 workspace，将每个 skill 复制到 `<workspace_root>/<name>-workspace/.claude/skills/<name>/`。主要目的是在受控的、隔离于源码仓库的环境下验证对应 skill 的功能。`packages/` 下的 CLI 包不在同步范围内，需单独安装（见下文「常用命令」）。
+
+`<workspace_root>` 可配置，默认 `~/.melodyi-skills/workspace`。配置优先级：CLI `--workspace-root` > 环境变量 `MELODYI_SYNC_WORKSPACE_ROOT` > `scripts/sync-skills.local.yaml`（本地覆盖，gitignore）> `scripts/sync-skills.yaml`（仓库默认）> 内置默认。详见 `scripts/sync-skills.yaml` 注释。
 
 > 注：仓库内的 `workspace/` 目录是历史遗留的本地运行时目录，已被 `.gitignore` 忽略；当前同步脚本的实际目标是 `../skill-workspace/`，不要往仓库内 `workspace/` 写新内容。
 
@@ -22,9 +24,9 @@ Skills 通过 `sync-skills.sh` 同步到 **仓库同级目录** `../skill-worksp
 ```
 melodyi-skills/
 |-- skills/              # 所有 skill 的定义（SKILL.md + 可选 CLAUDE.md/scripts/tests）
+|-- scripts/            # 仓库级脚本（sync_skills.py 同步脚本 + 配置）
 |-- packages/           # 需安装为 CLI 的较重代码包（含 pyproject.toml、源码、tests/）
 |-- docs/               # 文档资料
-|-- sync-skills.sh      # 同步脚本：skills/ -> ../skill-workspace/<name>-workspace/.claude/skills/<name>/
 |-- SKILL.md.source     # 部分 skill 的原始需求/草稿来源
 +-- CLAUDE.md           # 本文件
 ```
@@ -43,8 +45,10 @@ melodyi-skills/
 ## 常用命令
 
 ```bash
-# 同步所有 skill 到隔离 workspace（仓库同级 ../skill-workspace/）
-bash sync-skills.sh
+# 同步所有 skill 到隔离 workspace（默认 ~/.melodyi-skills/workspace，可配置）
+python scripts/sync_skills.py
+# 指定目标目录（覆盖配置与环境变量）
+python scripts/sync_skills.py --workspace-root /path/to/workspace
 
 # 安装某个 CLI 包（开发模式，需在各包目录或仓库根执行）
 pip install -e packages/gitcode

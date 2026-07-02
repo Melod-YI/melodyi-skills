@@ -13,3 +13,6 @@ skills/get-user-location/reverse-geocode-response.json
 
 # 比对模式 SQLite 数据库（运行时生成，落用户目录；此处防止误提交 CWD 下的残留）
 packages/melodyi-web/data/
+
+# sync-skills 本地覆盖配置（不提交，仅本地生效）
+scripts/sync-skills.local.yaml

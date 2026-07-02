@@ -1,0 +1,17 @@
+# sync-skills 同步脚本配置
+#
+# 提交进仓库作为默认配置；如需本地覆盖（不提交），请新建同目录下
+# sync-skills.local.yaml 并写入 workspace_root，其优先级高于本文件。
+#
+# 完整优先级（高 -> 低）：
+#   1. CLI 参数 --workspace-root
+#   2. 环境变量 MELODYI_SYNC_WORKSPACE_ROOT
+#   3. sync-skills.local.yaml（本地覆盖，gitignore）
+#   4. sync-skills.yaml（本文件）
+#   5. 内置默认 ~/.melodyi-skills/workspace
+#
+# 路径支持 ~ 与 ${HOME} 展开。
+
+# 目标 workspace 根目录；每个 skill 会被同步到
+# <workspace_root>/<skill>-workspace/.claude/skills/<skill>/
+workspace_root: "~/.melodyi-skills/workspace"
