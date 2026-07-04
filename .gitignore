@@ -16,3 +16,6 @@ packages/melodyi-web/data/
 
 # sync-skills 本地覆盖配置（不提交，仅本地生效）
 scripts/sync-skills.local.yaml
+
+# gws-gmail-send 用户参考资料（收件人邮箱、邮件模板等个人内容，仅本地保留）
+skills/gws-gmail-send/reference/

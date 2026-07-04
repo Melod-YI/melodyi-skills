@@ -48,7 +48,12 @@ gws gmail +send --to alice@example.com --subject 'Hello' --body 'Hi!' --draft
 - With --html, use fragment tags (<p>, <b>, <a>, <br>, etc.) — no <html>/<body> wrapper needed.
 - Use --draft to save the message as a draft instead of sending it immediately.
 
-## 其他注意事项
+## reference
+
+检查skill目录下的 reference 目录，如果其中有内容也要读取。
+其中可能会记录用户的常见邮箱地址、发送邮件的内容要求、模板等信息。
+
+## 附件流程
 
 gmail的附件会有"类型"、"大小"的限制，我希望在附件附送前统一进行压缩。
 该行为仅为绕开限制而非保护文件，因此不需要考虑密码安全相关的问题。
@@ -67,8 +72,6 @@ python skills/gws-gmail-send/scripts/pack_attachments.py <文件或文件夹> [<
 - 脚本 stdout 输出两行供解析：
   - `ARCHIVE=<最终 zip 绝对路径>`
   - `PASSWORD=<密码>`
-
-> 注：实测发现双层压缩（内层无密码 + 外层密码）会被 Gmail 识别为风险附件，单层带密码 zip 反而不会，因此本脚本只做一次带密码压缩。
 
 ### 发送流程
 
