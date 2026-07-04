@@ -55,32 +55,28 @@ gmail的附件会有"类型"、"大小"的限制，我希望在附件附送前�
 
 ### 附件打包
 
-调用脚本 `scripts/pack_attachments.py` 完成两轮压缩：
+调用脚本 `scripts/pack_attachments.py` 完成带密码压缩：
 
 ```bash
 python skills/gws-gmail-send/scripts/pack_attachments.py <文件或文件夹> [<文件或文件夹> ...] [-p <密码>] [-o <输出zip路径>]
 ```
 
 - 入参为一个或多个文件/文件夹路径。
-- `-p/--password` 指定外层 zip 密码；**省略时随机生成**。
+- `-p/--password` 指定 zip 密码；**省略时随机生成**。
 - `-o/--output` 指定最终 zip 路径；省略时写入当前目录 `gmail_attachments_<时间戳>.zip`。
 - 脚本 stdout 输出两行供解析：
-  - `ARCHIVE=<最终外层 zip 绝对路径>`
+  - `ARCHIVE=<最终 zip 绝对路径>`
   - `PASSWORD=<密码>`
 
-### 两轮压缩原理
-
-zip 格式默认只加密内容、不加密文件名，单层密码 zip 仍会暴露内部文件名而被 Gmail 据文件名拦挡。
-脚本因此采用两轮：第一轮把附件打成无密码 `inner.zip`，第二轮用密码把 `inner.zip` 打成外层 zip。
-外层 zip 只暴露 `inner.zip` 这个名字，真实文件名藏在被加密的内层 zip 中，Gmail 无法进一步枚举，从而绕开基于文件名的扫描。
+> 注：实测发现双层压缩（内层无密码 + 外层密码）会被 Gmail 识别为风险附件，单层带密码 zip 反而不会，因此本脚本只做一次带密码压缩。
 
 ### 发送流程
 
 1. 运行上述脚本，从 `ARCHIVE=` 取得最终 zip 路径、`PASSWORD=` 取得密码。
 2. 用 `gws gmail +send ... --attach <ARCHIVE 路径>` 发送。
-3. **正文必须说明解压方式**：先用密码解压外层 zip 得到 `inner.zip`，再解压 `inner.zip`（无密码）即得原始文件。示例正文：
+3. **正文必须说明解压方式**：用密码解压 zip 即得原始文件。示例正文：
 
-   > 附件经两层 zip 压缩。先用密码 `<密码>` 解压外层 zip 得到 inner.zip，再解压 inner.zip（无密码）即可。
+   > 附件为带密码 zip，解压密码：`<密码>`。
 
 > [!CAUTION]
 > This is a **write** command — confirm with the user before executing.

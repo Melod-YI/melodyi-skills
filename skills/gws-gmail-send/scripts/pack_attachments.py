@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""gws-gmail-send 附件两轮压缩打包工具。
+"""gws-gmail-send 附件密码压缩打包工具。
 
-绕开 Gmail 附件类型/文件名扫描：第一轮把入参文件/文件夹打成无密码 zip，
-第二轮用密码把该 zip 再包一层 zip。最终产物为外层密码 zip，密码回显给调用方，
-便于在邮件正文中告知收件人解压方式。
+用 7z 把入参文件/文件夹打成一个带密码的 zip，密码回显给调用方，便于在邮件正文中
+告知收件人解压方式。
 
-zip 格式默认只加密内容、不加密文件名，因此单层密码 zip 仍会暴露内部文件名；
-两轮设计让外层 zip 只暴露 ``inner.zip`` 这个名字，真实文件名藏在被加密的内层 zip 里，
-Gmail 无法进一步枚举，从而绕开基于文件名的扫描。
+实测发现：双层压缩（内层无密码 + 外层密码）会被 Gmail 识别为风险附件，单层密码 zip
+反而不会。因此本工具仅做一次带密码压缩。
 
 用法::
 
@@ -15,7 +13,7 @@ Gmail 无法进一步枚举，从而绕开基于文件名的扫描。
 
 stdout 输出两行，供调用方解析::
 
-    ARCHIVE=<最终外层 zip 绝对路径>
+    ARCHIVE=<最终 zip 绝对路径>
     PASSWORD=<密码>
 """
 
@@ -27,7 +25,6 @@ import shutil
 import string
 import subprocess
 import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -36,7 +33,6 @@ DEFAULT_7Z = "7z"
 PASSWORD_ALPHABET = string.ascii_letters + string.digits
 PASSWORD_LENGTH = 16
 ARCHIVE_FORMAT = "zip"
-INNER_ARCHIVE_NAME = "inner.zip"
 
 
 class PackError(RuntimeError):
@@ -87,7 +83,7 @@ def pack(
     output: Path | None,
     seven_zip: str = DEFAULT_7Z,
 ) -> tuple[Path, str]:
-    """执行两轮打包，返回 (最终 zip 路径, 密码)。"""
+    """执行一次带密码打包，返回 (最终 zip 路径, 密码)。"""
     if not paths:
         raise PackError("至少提供一个文件或文件夹路径")
     for p in paths:
@@ -100,29 +96,26 @@ def pack(
     out_path = output.resolve() if output else default_output_path()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 用临时目录存放中间产物 inner.zip，完成后清理
-    with tempfile.TemporaryDirectory() as tmp:
-        inner = Path(tmp) / INNER_ARCHIVE_NAME
-        # 第一轮：无密码 zip，把入参打包
-        run_7z(seven_zip, ["a", f"-t{ARCHIVE_FORMAT}", str(inner), *[str(p) for p in paths]])
-        # 第二轮：用密码把 inner.zip 打成外层 zip
-        run_7z(seven_zip, ["a", f"-t{ARCHIVE_FORMAT}", f"-p{pwd}", str(out_path), str(inner)])
+    # 单层带密码 zip：实测双层会被 Gmail 识别为风险，单层不会
+    run_7z(seven_zip, [
+        "a", f"-t{ARCHIVE_FORMAT}", f"-p{pwd}", str(out_path), *[str(p) for p in paths],
+    ])
 
     return out_path, pwd
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="gws-gmail-send 附件两轮压缩打包工具（绕开 Gmail 文件名扫描）",
+        description="gws-gmail-send 附件密码压缩打包工具",
     )
     parser.add_argument("paths", nargs="+", help="一个或多个文件/文件夹路径")
     parser.add_argument(
         "-p", "--password", default=None,
-        help="外层 zip 密码；不指定则随机生成并回显",
+        help="zip 密码；不指定则随机生成并回显",
     )
     parser.add_argument(
         "-o", "--output", default=None,
-        help="最终外层 zip 路径；不指定则写入当前目录 gmail_attachments_<时间戳>.zip",
+        help="最终 zip 路径；不指定则写入当前目录 gmail_attachments_<时间戳>.zip",
     )
     parser.add_argument(
         "--7z", dest="seven_zip", default=DEFAULT_7Z,
