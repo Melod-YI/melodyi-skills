@@ -7,6 +7,12 @@ description: "Gmail: Send an email."
 
 Send an email
 
+## 注意
+> [!CAUTION]
+> This is a **write** command — confirm with the user before executing.
+
+你在正式执行发送之前，需要把你打算发送的内容（地址、标题、正文、附件等信息）发送给用户确认，并得到允许后才能发送。
+
 ## Usage
 
 ```bash
@@ -80,6 +86,4 @@ python skills/gws-gmail-send/scripts/pack_attachments.py <文件或文件夹> [<
 3. **正文必须说明解压方式**：用密码解压 zip 即得原始文件。示例正文：
 
    > 附件为带密码 zip，解压密码：`<密码>`。
-
-> [!CAUTION]
-> This is a **write** command — confirm with the user before executing.
+4. 发送完成后，清理生成的zip文件。
