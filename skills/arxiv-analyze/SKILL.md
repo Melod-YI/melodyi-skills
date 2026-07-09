@@ -49,11 +49,13 @@ ls .arxiv_papers/<paper_id>/source/
 
 Common main file names: `main.tex`, `arxiv.tex`, `paper.tex`, or matching the paper title.
 
+**Multi-file papers**: Many arXiv papers split content across `sections/*.tex` (or similar) via `\input{}`. The main file is often just a scaffold of `\input{}` calls plus metadata (title, author, packages). After reading the main file, follow every `\input{}` directive to read the actual content (abstract, intro, methods, results, etc.). Also read any `macros.tex` / `math_commands.tex` / notation files early — these define key terms like `\name` (the method's short name, e.g. `ACE`) and custom math symbols you need to interpret the rest of the paper.
+
 ### Step 3: Read Main Content
 
 Once you've found the main file, Read the contents and then recurse through all other relevant source files to read the paper.
 
-你必须处理过所有的外部资源，确保对论文的内容有准确、完整的了解。所有图片必须经过图像理解工具的处理。
+你必须处理过所有的外部资源，确保对论文的内容有准确、完整的了解。所有图片必须经过图像理解工具或skill的处理。
 
 ## Handling Referenced Elements
 
@@ -73,9 +75,9 @@ When you encounter references in the TeX source, process them inline:
 1. Use Read tool on the PDF to extract text labels (axis, legend, caption)
 2. Convert to PNG using the bundled script:
    ```bash
-   python .claude/skills/arxiv-analyze/scripts/convert_pdf_to_png.py <pdf_path>
+   python <skill_dir>/scripts/convert_pdf_to_png.py <pdf_path>
    ```
-   The PNG is saved alongside the PDF (same directory).
+   The PNG is saved alongside the PDF (same directory). Batch multiple PDFs in one shell loop.
 3. Call image understanding tool with the converted PNG path and a prompt built from step 1 labels + context
 
 ### Tables (External Files)
@@ -141,7 +143,7 @@ python scripts/convert_pdf_to_png.py <pdf_path> [dpi]
 
 **Output:** PNG file(s) saved alongside the PDF, path(s) printed to stdout.
 
-**Dependencies:** PyMuPDF (`pip install PyMuPDF`)
+**Dependencies:** PyMuPDF. **Install with** `uv pip install --python "$(which python)" PyMuPDF` (NOT bare `pip install` — on a Windows host with multiple Pythons, bare `pip` resolves to the wrong interpreter and the install lands in e.g. anaconda instead of the Hermes venv, leaving the script's `import fitz` still failing). If `uv` is unavailable, use `python -m pip install PyMuPDF` only after confirming `python -m pip --version` points at the intended venv.
 
 ## Tips
 
@@ -150,3 +152,7 @@ python scripts/convert_pdf_to_png.py <pdf_path> [dpi]
 3. **Build prompts from context** — Use `\caption{}`, surrounding paragraphs, and extracted labels to create focused image analysis prompts
 4. **Tables are LaTeX source** — Read and parse directly; no conversion needed
 5. **TikZ is inline** — Parse the code when you encounter it in the main text
+6. **Batch figure analysis** — When a paper has multiple figures, batch all `vision_analyze` (or equivalent) calls in ONE assistant turn instead of serializing. The runtime executes them concurrently — for a 4-figure paper this cuts wall-clock from ~4 rounds to 1. Build each call's `question` from the `\caption{}` + surrounding TeX context so the vision pass has the author's intent, not just the pixels.
+7. **Cache vision results as `.txt`** — After each figure's vision result returns, write it to `<figure_basename>.txt` next to the image (per the Figures section). If the same paper is revisited or a later step needs the figure's content, read the txt instead of re-running vision.
+8. **Cross-verify screenshots with external sources** — When a figure is a screenshot of an external artifact (leaderboard, benchmark page, live UI) and the vision pass cannot confirm a key claim the paper makes about it (e.g. "our method appears at rank X"), do NOT trust either the screenshot or the paper alone. Run a `web_search` for the authoritative source and reconcile. Vision models hallucinate entries that aren't in screenshots; papers can overstate standings. The reconcile step is the lesson — not "vision failed".
+9. **Cross-verify multi-series chart labels with paper text** — When a figure plots multiple methods/series (e.g. a 3-drafter comparison across positions), the vision model may correctly read the curves but **swap which legend entry belongs to which method** (it guessed "Eagle3 = parallel" when the paper text says Eagle3 = autoregressive). This corrupts the downstream report. After each multi-series vision result, cross-check the assignment against the TeX source (`\caption{}`, the surrounding paragraph that names each series) before trusting it. If the vision-assigned labels conflict with the paper, correct them in the `.txt` cache with a `NOTE:` line (e.g. `NOTE: vision model mislabeled drafter types; correct mapping per paper text: ...`) and use the corrected mapping in the report. Do not call this a vision failure — it's a known failure mode of chart legend parsing that the paper's own text disambiguates.
