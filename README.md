@@ -43,7 +43,8 @@
 
 ```
 melodyi-skills/
-├── skills/        # 所有 skill 的定义（SKILL.md + 可选 CLAUDE.md/scripts/tests）
+├── skills/        # 所有 skill 的定义（SKILL.md + 可选 CLAUDE.md/scripts），仅运行时产物
+├── tests/         # skill 脚本测试（按 skill 分目录，与 skills/ 同级，不随 sync 复制）
 ├── packages/      # 需安装为 CLI 的较重代码包（gitcode / melodyi-web / melodyi-filebot）
 ├── scripts/       # 仓库级脚本：sync_skills.py 同步脚本 + 配置
 ├── docs/          # 文档资料
@@ -113,8 +114,10 @@ pytest packages/melodyi-filebot/tests -v
 pytest packages/<pkg>/tests/test_xxx.py::test_name -v
 pytest packages/<pkg>/tests/test_xxx.py -k "test_name"
 
-# 部分轻量 skill 自带 tests/ 与 pytest.ini
-pytest skills/melodyi-vision/tests -v
+# skill 脚本测试统一放在仓库根 tests/ 下（按 skill 分目录）
+# 各 tests/<skill>/conftest.py 会自动注入对应 skills/<skill>/scripts 到 sys.path
+pytest tests -v                       # 跑全部 skill 脚本测试
+pytest tests/melodyi-vision -v        # 跑单个 skill 的测试
 
 # 同步脚本自身的测试
 pytest scripts/test_sync_skills.py -v

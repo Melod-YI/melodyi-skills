@@ -23,7 +23,8 @@ Skills 通过 `scripts/sync_skills.py` 同步到隔离 workspace，将每个 ski
 
 ```
 melodyi-skills/
-|-- skills/              # 所有 skill 的定义（SKILL.md + 可选 CLAUDE.md/scripts/tests）
+|-- skills/              # 所有 skill 的定义（SKILL.md + 可选 CLAUDE.md/scripts），仅运行时产物，不含测试
+|-- tests/               # skill 脚本测试（按 skill 分目录，与 skills/ 同级，不随 sync 复制）
 |-- scripts/            # 仓库级脚本（sync_skills.py 同步脚本 + 配置）
 |-- packages/           # 需安装为 CLI 的较重代码包（含 pyproject.toml、源码、tests/）
 |-- docs/               # 文档资料
@@ -66,8 +67,10 @@ pytest packages/melodyi-filebot/tests -v
 pytest packages/<pkg>/tests/test_xxx.py::test_name -v
 pytest packages/<pkg>/tests/test_xxx.py -k "test_name"
 
-# 运行 skill 内置脚本测试（部分 skill 自带 tests/ 与 pytest.ini，如 melodyi-vision、get-user-location）
-pytest skills/melodyi-vision/tests -v
+# 运行 skill 脚本测试（测试统一放在仓库根 tests/ 下，按 skill 分目录；
+# 各 tests/<skill>/conftest.py 会自动注入对应 skills/<skill>/scripts 到 sys.path）
+pytest tests -v                          # 跑全部 skill 脚本测试
+pytest tests/melodyi-vision -v           # 跑单个 skill 的测试
 ```
 
 > 各 package 的具体命令、CLI 子命令与配置细节见 `packages/<pkg>/CLAUDE.md`。

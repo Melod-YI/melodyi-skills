@@ -1,15 +1,8 @@
 """huawei_cloud.favorites 收藏点加载、近邻匹配与格式化测试"""
 
 import json
-import sys
-from pathlib import Path
 
 import pytest
-
-# 将 script/ 加入模块搜索路径，使其可直接 import huawei_cloud
-SCRIPT_DIR = Path(__file__).resolve().parents[1] / "script"
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
 
 from huawei_cloud import favorites
 
