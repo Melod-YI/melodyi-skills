@@ -294,28 +294,38 @@ class TestSend:
 class TestInitConfig:
     def test_generates_template(self, tmp_path):
         path = tmp_path / "config.yaml"
-        send_mail.init_config(path)
+        created = send_mail.init_config(path)
+        assert created is True
         assert path.exists()
         text = path.read_text(encoding="utf-8")
         assert "smtp.qq.com" in text
         assert "username" in text and "auth_code" in text
 
-    def test_refuses_overwrite_without_force(self, tmp_path):
+    def test_existing_not_overwritten(self, tmp_path):
         path = tmp_path / "config.yaml"
         send_mail.init_config(path)
-        with pytest.raises(FileExistsError):
-            send_mail.init_config(path)
-        # --force 可覆盖
-        send_mail.init_config(path, force=True)
-        assert path.exists()
+        # 写入用户自定义内容
+        path.write_text("smtp:\n  username: custom@qq.com\n", encoding="utf-8")
+        # 再次 init：不覆盖，用户内容保留
+        created = send_mail.init_config(path)
+        assert created is False
+        assert "custom@qq.com" in path.read_text(encoding="utf-8")
 
-    def test_init_via_main(self, tmp_path, capsys):
+    def test_init_via_main_creates(self, tmp_path, capsys):
         path = tmp_path / "config.yaml"
         rc = send_mail.main(["--init", "--config", str(path)])
         assert rc == send_mail.EXIT_OK
         assert path.exists()
         out = capsys.readouterr().out
         assert "已生成配置模板" in out
+
+    def test_init_via_main_existing(self, tmp_path, capsys):
+        path = tmp_path / "config.yaml"
+        send_mail.init_config(path)
+        rc = send_mail.main(["--init", "--config", str(path)])
+        assert rc == send_mail.EXIT_OK
+        out = capsys.readouterr().out
+        assert "配置已存在" in out
 
 
 # ---------------------------------------------------------------------------

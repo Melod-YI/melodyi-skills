@@ -49,8 +49,7 @@ python skills/melodyi-mail-send/scripts/send_mail.py \
 | `--bcc` | — | — | 密送，逗号分隔多个（不写入邮件头，仅作为信封收件人） |
 | `--attach` | — | — | 附件路径，逗号分隔多个；支持 `~`、相对路径、`..`、Windows 路径，自动规范化 |
 | `--config` | — | `~/.melodyi-skills/melodyi-mail-send/config.yaml` | 配置文件路径 |
-| `--init` | — | — | 生成配置模板并退出（与发信互斥） |
-| `--force` | — | — | 仅与 `--init` 合用，覆盖已存在的配置 |
+| `--init` | — | — | 生成配置模板并退出；**已存在则仅提示、不覆盖**（与发信互斥） |
 
 多值字段（`--to`/`--cc`/`--bcc`/`--attach`）均为**单值 + 逗号分隔**，地址与附件路径均自动去重。
 

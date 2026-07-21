@@ -63,13 +63,13 @@ python skills/melodyi-mail-send/scripts/send_mail.py \
   [--config <配置路径>]          # 可选，默认 ~/.melodyi-skills/melodyi-mail-send/config.yaml
 
 # 初始化配置模板
-python skills/melodyi-mail-send/scripts/send_mail.py --init [--force]
-# 在 ~/.melodyi-skills/melodyi-mail-send/config.yaml 生成模板；已存在则拒绝，--force 才覆盖
+python skills/melodyi-mail-send/scripts/send_mail.py --init
+# 仅在没有配置时生成模板；已存在则仅提示、不覆盖（无强制覆盖出口）
 ```
 
 - 所有多值字段（to/cc/bcc/attach）均为**单值 + 逗号分隔**，argparse 用默认 `store`（不用 `append`）。
-- `--init` 与发信参数互斥：给 `--init` 只生成配置、不发信。
-- 无 `--from`（发件人固定来自配置 sender/username）、无 `--dry-run`、无 `--print-config`、无 `--body-file`。
+- `--init` 与发信参数互斥：给 `--init` 只生成配置、不发信；已存在配置时不覆盖、仅提示并退出码 0。
+- 无 `--from`（发件人固定来自配置 sender/username）、无 `--dry-run`、无 `--print-config`、无 `--body-file`、无 `--force`。
 - 发送前确认由 SKILL.md 的 CAUTION 约定保证（Claude 把内容给用户确认后才执行命令）。
 - 退出码：`0` 成功；`2` 参数缺失；`3` 配置缺失；非 0 含文件不存在、SMTP 错误等。
 - 输出：成功打印 `sent: <message-id>` + 收件人清单；失败打印错误与可操作提示。
@@ -108,7 +108,7 @@ python skills/melodyi-mail-send/scripts/send_mail.py --init [--force]
 
 - frontmatter：`name: melodyi-mail-send`，`description`：触发条件（如「通过 SMTP 发送邮件，默认 QQ 邮箱」）。
 - 顶部 `[CAUTION]`：write 命令——发送前必须把收件人/抄送/标题/正文/附件清单发给用户确认，得到允许后才执行。
-- Flags 表：`--to/--cc/--bcc/--subject/--body/--attach/--config/--init/--force`，逗号分隔多值规则。
+- Flags 表：`--to/--cc/--bcc/--subject/--body/--attach/--config/--init`，逗号分隔多值规则。
 - Examples：发信、带抄送、带附件、初始化配置各一例。
 - `reference/` 目录约定：可存常用收件地址、正文模板，Claude 发信前可读取（可选，不存在不报错）。
 - 配置说明：账号在 `~/.melodyi-skills/melodyi-mail-send/config.yaml`，首次用 `--init` 生成；授权码建议走 `MELODYI_MAIL_AUTH_CODE` 环境变量不落盘。
@@ -124,7 +124,7 @@ python skills/melodyi-mail-send/scripts/send_mail.py --init [--force]
 4. 附件：多附件按序附加、maintype/subtype 推断正确；不存在抛 `FileNotFoundError` 并退出码非 0；路径规范化（`~`/相对/`..`/反斜杠均能解析）。
 5. 配置优先级：内置默认 < 配置文件 < `MELODYI_MAIL_AUTH_CODE`；`username/auth_code` 缺失报错。
 6. 发送主流程：mock `SMTP_SSL`，验证 `login(username, auth_code)`、`send_message` 用了正确的 `from_addr` 与 `to_addrs=to+cc+bcc`、`quit` 被调用；成功 stdout 含 `sent:`。
-7. `--init`：临时目录生成 config.yaml，含 QQ 模板默认且 `username/auth_code` 为空；目标已存在时拒绝覆盖（无 `--force`）。
+7. `--init`：临时目录生成 config.yaml，含 QQ 模板默认且 `username/auth_code` 为空；已存在配置时不覆盖（用户自定义内容保留）、仅提示并退出码 0。
 8. 参数校验：缺 `--to/--subject/--body` 退出码 2。
 
 ## 8. 非目标

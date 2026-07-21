@@ -336,14 +336,18 @@ def send(
 # 配置初始化
 # ---------------------------------------------------------------------------
 
-def init_config(path: Path, force: bool = False) -> Path:
-    """生成 config.yaml 模板。已存在且未 --force 时抛 FileExistsError。"""
-    if path.exists() and not force:
-        raise FileExistsError(f"配置已存在: {path}（如需覆盖请加 --force）")
+def init_config(path: Path) -> bool:
+    """生成 config.yaml 模板。
+
+    仅在没有配置时生成；已存在则**不覆盖**，返回 False。返回 True 表示本次新建了模板。
+    """
+    if path.exists():
+        logger.info("配置已存在，跳过生成（不覆盖）: %s", path)
+        return False
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(CONFIG_TEMPLATE, encoding="utf-8")
     logger.info("已生成配置模板: %s", path)
-    return path
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -375,8 +379,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--attach", default="", help="附件路径，逗号分隔多个")
     p.add_argument("--config", default=str(DEFAULT_CONFIG_PATH),
                    help=f"配置文件路径（默认 {DEFAULT_CONFIG_PATH}）")
-    p.add_argument("--init", action="store_true", help="生成配置模板并退出")
-    p.add_argument("--force", action="store_true", help="--init 时覆盖已存在的配置")
+    p.add_argument("--init", action="store_true", help="生成配置模板并退出（已存在则仅提示，不覆盖）")
     return p
 
 
@@ -387,13 +390,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.init:
         path = Path(args.config).expanduser().resolve()
-        try:
-            init_config(path, force=args.force)
-        except FileExistsError as e:
-            print(f"错误：{e}", file=sys.stderr)
-            return EXIT_CONFIG_ERROR
-        print(f"已生成配置模板：{path}")
-        print("请编辑填入 username 与 auth_code（QQ 授权码，非登录密码）。")
+        created = init_config(path)
+        if created:
+            print(f"已生成配置模板：{path}")
+            print("请编辑填入 username 与 auth_code（QQ 授权码，非登录密码）。")
+        else:
+            print(f"配置已存在，未覆盖：{path}")
+            print("如需修改，请直接编辑该文件。")
         return EXIT_OK
 
     # 正式发信：加载配置后按其 log.level 重设日志
