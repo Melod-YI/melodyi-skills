@@ -51,6 +51,9 @@ python scripts/sync_skills.py
 # 指定目标目录（覆盖配置与环境变量）
 python scripts/sync_skills.py --workspace-root /path/to/workspace
 
+# 把仓库 skills/ 增量链接到 cc-switch 与 Claude Code（两层 symlink，不覆盖已存在项）
+python scripts/link_to_cc_switch.py [--skill <name>] [--dry-run] [--unlink]
+
 # 安装某个 CLI 包（开发模式，需在各包目录或仓库根执行）
 pip install -e packages/gitcode
 pip install -e packages/melodyi-web
