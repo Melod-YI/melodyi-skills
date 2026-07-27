@@ -18,12 +18,14 @@ class TestConfigDefaults:
         monkeypatch.delenv("VISION_MODEL", raising=False)
         monkeypatch.delenv("VISION_MAX_TOKENS", raising=False)
         monkeypatch.delenv("VISION_PROVIDER", raising=False)
+        monkeypatch.delenv("VISION_STREAM", raising=False)
         config = load_config()
         assert config.api_key == "test-key-123"
         assert config.api_base == "https://api.openai.com/v1"
         assert config.model == "gpt-4o"
         assert config.max_tokens == 1024
         assert config.provider == "openai"
+        assert config.stream is True
 
     def test_missing_api_key_raises_error(self, monkeypatch, no_config_file):
         monkeypatch.delenv("VISION_API_KEY", raising=False)
@@ -31,6 +33,7 @@ class TestConfigDefaults:
         monkeypatch.delenv("VISION_MODEL", raising=False)
         monkeypatch.delenv("VISION_MAX_TOKENS", raising=False)
         monkeypatch.delenv("VISION_PROVIDER", raising=False)
+        monkeypatch.delenv("VISION_STREAM", raising=False)
         with pytest.raises(SystemExit):
             load_config()
 
@@ -97,8 +100,55 @@ class TestCliOverride:
         monkeypatch.delenv("VISION_MODEL", raising=False)
         monkeypatch.delenv("VISION_MAX_TOKENS", raising=False)
         monkeypatch.delenv("VISION_PROVIDER", raising=False)
+        monkeypatch.delenv("VISION_STREAM", raising=False)
         config = load_config(cli_overrides={"model": None, "max_tokens": None})
         assert config.model == "gpt-4o"
+
+
+class TestStreamConfig:
+    """流式开关 stream：默认 True，可经配置文件/环境变量/CLI 关闭。"""
+
+    def test_default_stream_is_true(self, monkeypatch, no_config_file):
+        monkeypatch.setenv("VISION_API_KEY", "k")
+        monkeypatch.delenv("VISION_STREAM", raising=False)
+        assert load_config().stream is True
+
+    def test_config_file_bool_false_disables_stream(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        monkeypatch.delenv("VISION_STREAM", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"api_key": "k", "stream": False}))
+        assert load_config(config_path=str(cfg)).stream is False
+
+    def test_config_file_string_false_is_coerced(self, tmp_path, monkeypatch):
+        """配置文件把 stream 写成字符串时也应被归一为布尔。"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        monkeypatch.delenv("VISION_STREAM", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"api_key": "k", "stream": "false"}))
+        assert load_config(config_path=str(cfg)).stream is False
+
+    def test_env_var_disables_stream(self, monkeypatch, no_config_file):
+        monkeypatch.setenv("VISION_API_KEY", "k")
+        monkeypatch.setenv("VISION_STREAM", "false")
+        assert load_config().stream is False
+
+    def test_env_var_overrides_config_file_stream(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"api_key": "k", "stream": False}))
+        monkeypatch.setenv("VISION_STREAM", "true")
+        assert load_config(config_path=str(cfg)).stream is True
+
+    def test_cli_override_overrides_env_stream(self, monkeypatch, no_config_file):
+        monkeypatch.setenv("VISION_API_KEY", "k")
+        monkeypatch.setenv("VISION_STREAM", "false")
+        assert load_config(cli_overrides={"stream": True}).stream is True
+
+    def test_none_cli_override_keeps_env_stream(self, monkeypatch, no_config_file):
+        monkeypatch.setenv("VISION_API_KEY", "k")
+        monkeypatch.setenv("VISION_STREAM", "false")
+        assert load_config(cli_overrides={"stream": None}).stream is False
 
 
 class TestConfigFileLocation:

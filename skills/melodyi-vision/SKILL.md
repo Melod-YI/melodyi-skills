@@ -46,6 +46,7 @@ Priority: CLI arguments > environment variables > config file > defaults.
 | Model | `VISION_MODEL` | `model` | `gpt-4o` |
 | Max Tokens | `VISION_MAX_TOKENS` | `max_tokens` | `1024` |
 | Provider | `VISION_PROVIDER` | `provider` | `openai` |
+| 流式调用 | `VISION_STREAM` | `stream` | `true` |
 
 Config file locations (checked in order; all resolved independent of the current working directory — you can run the script from any drive/directory):
 1. `--config <path>` (CLI argument)
@@ -61,9 +62,12 @@ Config file format:
   "api_base": "https://api.openai.com/v1",
   "model": "gpt-4o",
   "max_tokens": 1024,
-  "provider": "openai"
+  "provider": "openai",
+  "stream": true
 }
 ```
+
+> **流式调用**：默认 `stream: true`，以 SSE 方式请求并在内部累加 `delta.content` 后返回完整文本，可降低首 token 延迟、避免长输出超时。若上游 API 不支持流式或需一次性返回，可经 `VISION_STREAM=false`、配置文件 `"stream": false` 或 CLI `--no-stream` 切回非流式。
 
 ## Examples
 

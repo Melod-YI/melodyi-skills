@@ -26,6 +26,15 @@ class VisionConfig:
     model: str = "gpt-4o"
     max_tokens: int = 1024
     provider: str = "openai"
+    # 是否使用流式调用（SSE），默认开启；可经配置/环境变量/CLI 关闭以走一次性返回
+    stream: bool = True
+
+
+def _parse_bool(value) -> bool:
+    """将字符串或已是布尔的值解析为布尔，支持 true/false/1/0/yes/no/on/off（不区分大小写）。"""
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1", "yes", "on")
 
 
 def _config_search_paths(cli_path: Optional[str] = None) -> list:
@@ -74,6 +83,7 @@ def _get_env_vars() -> dict:
         "model": "VISION_MODEL",
         "max_tokens": "VISION_MAX_TOKENS",
         "provider": "VISION_PROVIDER",
+        "stream": "VISION_STREAM",
     }
     result = {}
     for key, env_var in env_map.items():
@@ -81,6 +91,8 @@ def _get_env_vars() -> dict:
         if value is not None:
             if key == "max_tokens":
                 result[key] = int(value)
+            elif key == "stream":
+                result[key] = _parse_bool(value)
             else:
                 result[key] = value
     return result
@@ -112,5 +124,9 @@ def load_config(cli_overrides: Optional[dict] = None, config_path: Optional[str]
     if "api_key" not in values or not values["api_key"]:
         print("Error: API key is required. Set VISION_API_KEY environment variable or provide in config file.", file=sys.stderr)
         sys.exit(1)
+
+    # 配置文件可能把 stream 写成字符串，统一归一为布尔
+    if "stream" in values:
+        values["stream"] = _parse_bool(values["stream"])
 
     return VisionConfig(**values)

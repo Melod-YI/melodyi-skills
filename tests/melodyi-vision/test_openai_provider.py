@@ -40,6 +40,7 @@ class TestOpenAIProviderRequest:
             api_base="https://api.openai.com/v1",
             model="gpt-4o",
             max_tokens=1024,
+            stream=False,
         )
         result = provider.understand("aW1hZ2VkYXRh", "image/png", "What is this?")
 
@@ -48,6 +49,8 @@ class TestOpenAIProviderRequest:
         body = captured_request["body"]
         assert body["model"] == "gpt-4o"
         assert body["max_tokens"] == 1024
+        # 非流式不应携带 stream 字段
+        assert "stream" not in body
         assert len(body["messages"]) == 1
         assert body["messages"][0]["role"] == "user"
         content = body["messages"][0]["content"]
@@ -57,6 +60,120 @@ class TestOpenAIProviderRequest:
         assert content[1]["image_url"]["url"] == "data:image/png;base64,aW1hZ2VkYXRh"
 
 
+class TestOpenAIProviderStream:
+    """流式（SSE）调用默认开启，逐块累加 delta.content。"""
+
+    def _stream_response(self, content_chunks):
+        """构造一个可按行迭代的 SSE 假响应。"""
+        lines = []
+        for c in content_chunks:
+            payload = {"choices": [{"delta": {"content": c}}]}
+            lines.append(b"data: " + json.dumps(payload).encode("utf-8"))
+        lines.append(b"data: [DONE]")
+
+        class FakeStreamResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def __iter__(self):
+                return iter(lines)
+
+        return FakeStreamResponse()
+
+    def test_default_stream_is_true(self):
+        """未显式指定 stream 时，默认应为 True（流式）。"""
+        provider = OpenAIProvider(
+            api_key="test-key",
+            api_base="https://api.openai.com/v1",
+            model="gpt-4o",
+            max_tokens=1024,
+        )
+        assert provider.stream is True
+
+    def test_stream_sends_stream_flag_in_body(self, monkeypatch):
+        captured = {}
+
+        def fake_urlopen(req, data=None, timeout=None):
+            captured["body"] = json.loads(data.decode("utf-8"))
+            return self._stream_response(["ok"])
+
+        monkeypatch.setattr(
+            "providers.openai_provider.urllib.request.urlopen", fake_urlopen
+        )
+        provider = OpenAIProvider(
+            api_key="test-key",
+            api_base="https://api.openai.com/v1",
+            model="gpt-4o",
+            max_tokens=1024,
+        )
+        result = provider.understand("data", "image/png", "describe")
+        assert captured["body"]["stream"] is True
+        assert result == "ok"
+
+    def test_stream_accumulates_delta_content(self, monkeypatch):
+        def fake_urlopen(req, data=None, timeout=None):
+            return self._stream_response(["Hello", " world", "!"])
+
+        monkeypatch.setattr(
+            "providers.openai_provider.urllib.request.urlopen", fake_urlopen
+        )
+        provider = OpenAIProvider(
+            api_key="test-key",
+            api_base="https://api.openai.com/v1",
+            model="gpt-4o",
+            max_tokens=1024,
+        )
+        assert provider.understand("data", "image/png", "describe") == "Hello world!"
+
+    def test_stream_skips_delta_without_content(self, monkeypatch):
+        """首个 chunk 通常只有 role、无 content，应被跳过而不报错。"""
+        lines = [
+            b'data: {"choices":[{"delta":{"role":"user"}}]}',
+            b'data: {"choices":[{"delta":{"content":"hi"}}]}',
+            b"data: [DONE]",
+        ]
+
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+            def __iter__(self):
+                return iter(lines)
+
+        monkeypatch.setattr(
+            "providers.openai_provider.urllib.request.urlopen",
+            lambda req, data=None, timeout=None: Resp(),
+        )
+        provider = OpenAIProvider(
+            api_key="test-key",
+            api_base="https://api.openai.com/v1",
+            model="gpt-4o",
+            max_tokens=1024,
+        )
+        assert provider.understand("data", "image/png", "describe") == "hi"
+
+    def test_stream_empty_result_exits(self, monkeypatch):
+        """SSE 流没有累加出任何内容时应以 SystemExit 退出。"""
+        monkeypatch.setattr(
+            "providers.openai_provider.urllib.request.urlopen",
+            lambda req, data=None, timeout=None: self._stream_response([]),
+        )
+        provider = OpenAIProvider(
+            api_key="test-key",
+            api_base="https://api.openai.com/v1",
+            model="gpt-4o",
+            max_tokens=1024,
+        )
+        with pytest.raises(SystemExit):
+            provider.understand("data", "image/png", "describe")
+
+
 class TestOpenAIProviderErrors:
     def _make_provider(self):
         return OpenAIProvider(
@@ -64,6 +181,7 @@ class TestOpenAIProviderErrors:
             api_base="https://api.openai.com/v1",
             model="gpt-4o",
             max_tokens=1024,
+            stream=False,
         )
 
     def test_api_http_error(self, monkeypatch):

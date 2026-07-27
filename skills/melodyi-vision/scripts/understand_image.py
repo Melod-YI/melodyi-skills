@@ -24,6 +24,12 @@ def parse_args(args=None):
     parser.add_argument(
         "--max-tokens", type=int, help="Override max_tokens from config"
     )
+    parser.add_argument(
+        "--stream",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="使用流式（SSE）调用（默认开启）；用 --no-stream 切回一次性返回",
+    )
     return parser.parse_args(args)
 
 
@@ -34,6 +40,7 @@ def main(args=None):
         "provider": parsed.provider,
         "model": parsed.model,
         "max_tokens": parsed.max_tokens,
+        "stream": parsed.stream,
     }
     config = load_config(
         cli_overrides=cli_overrides,
@@ -48,6 +55,7 @@ def main(args=None):
         api_base=config.api_base,
         model=config.model,
         max_tokens=config.max_tokens,
+        stream=config.stream,
     )
 
     result = provider.understand(image_data, mime_type, parsed.prompt)
