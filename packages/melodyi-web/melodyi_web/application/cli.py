@@ -22,6 +22,7 @@ from melodyi_web.domain.services.provider_factory import ProviderFactory
 from melodyi_web.domain.services.fetch_provider_factory import FetchProviderFactory
 from melodyi_web.domain.services.fetch_executor import FetchExecutionStrategy
 from melodyi_web.infrastructure.config.config_loader import load_config
+from melodyi_web.infrastructure.http.http_client import HttpClient
 from melodyi_web.domain.services.comparison_recorder import ComparisonRecorder
 from melodyi_web.infrastructure.database.database_manager import DatabaseManager
 from melodyi_web.providers.fetch.base_fetch_provider import ProviderFetchRequest
@@ -114,6 +115,9 @@ def search(
     try:
         # 1. 加载配置
         config = load_config(config_path)
+
+        # 应用全局 SSL 校验开关：默认校验，配置关闭时所有 provider 共享关闭
+        HttpClient.set_default_verify_ssl(config.http.verify_ssl)
 
         # 2. 构建统一搜索请求
         time_range_obj = None
@@ -248,6 +252,9 @@ def fetch(
     try:
         # 1. 加载配置
         config = load_config(config_path)
+
+        # 应用全局 SSL 校验开关：默认校验，配置关闭时所有 provider 共享关闭
+        HttpClient.set_default_verify_ssl(config.http.verify_ssl)
 
         # 2. 构建抓取请求
         fetch_request = FetchRequest(url=url, preferred_provider=provider)
@@ -437,6 +444,14 @@ fallback:
   retry_delay_ms: 1000    # 重试间隔（毫秒）
 
 # ====================
+# HTTP 客户端配置
+# ====================
+http:
+  # 是否校验 SSL 证书（默认校验）
+  # 仅在内网自签名证书、自托管服务（SearXNG/Firecrawl）等场景下设为 false
+  verify_ssl: true
+
+# ====================
 # 数据库配置
 # ====================
 # 比对模式下存储结果数据
@@ -534,6 +549,9 @@ def config_show(config_path: Optional[str], output: str):
             click.echo(f"\n回退配置:")
             click.echo(f"  retry_count: {config.fallback.retry_count}")
             click.echo(f"  retry_delay_ms: {config.fallback.retry_delay_ms}")
+
+            click.echo(f"\nHTTP 配置:")
+            click.echo(f"  verify_ssl: {config.http.verify_ssl}")
 
     except FileNotFoundError as e:
         click.echo(f"错误: {e}", err=True)

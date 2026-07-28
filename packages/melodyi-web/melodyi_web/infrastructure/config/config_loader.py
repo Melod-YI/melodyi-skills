@@ -17,6 +17,7 @@ from melodyi_web.infrastructure.config.config_schema import (
     Config,
     ModeConfig,
     FallbackConfig,
+    HttpConfig,
     DatabaseConfig,
 )
 from melodyi_web.domain.models.provider_config import ProviderConfig
@@ -69,6 +70,7 @@ def _get_builtin_default_config() -> Config:
         ],
         mode=ModeConfig(comparison=False, log_dir=str(USER_CONFIG_DIR / "logs")),
         fallback=FallbackConfig(retry_count=2, retry_delay_ms=1000),
+        http=HttpConfig(verify_ssl=True),
         database=DatabaseConfig(database_path=str(USER_CONFIG_DIR / "data" / "compare.db")),
     )
 

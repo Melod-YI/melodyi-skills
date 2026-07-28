@@ -119,6 +119,34 @@ search_providers:
         assert config.fetch_providers[0].name == "jina"
         assert config.fetch_providers[1].name == "markdown-new"
 
+    def test_load_default_config_verify_ssl(self, monkeypatch, tmp_path):
+        """内置默认配置应校验 SSL（verify_ssl=True）。
+
+        回归保护：默认必须校验，仅在用户显式配置 http.verify_ssl: false 时关闭。
+        """
+        monkeypatch.setattr(
+            "melodyi_web.infrastructure.config.config_loader.USER_CONFIG_FILE",
+            tmp_path / "nonexistent.yaml",
+        )
+        config = load_config()
+        assert config.http.verify_ssl is True
+
+    def test_load_yaml_config_disable_ssl(self):
+        """测试从 yaml 加载关闭 SSL 校验的 http 配置"""
+        yaml_content = """
+http:
+  verify_ssl: false
+"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            f.write(yaml_content)
+            temp_path = f.name
+        try:
+            config = load_config(temp_path)
+        finally:
+            os.unlink(temp_path)
+
+        assert config.http.verify_ssl is False
+
 
 class TestDatabaseConfigDefault:
     """DatabaseConfig 默认路径测试"""

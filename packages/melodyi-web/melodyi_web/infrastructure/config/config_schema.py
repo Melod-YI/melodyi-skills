@@ -42,6 +42,14 @@ class FallbackConfig(BaseModel):
     retry_delay_ms: int = Field(default=1000, ge=0, description="重试间隔")
 
 
+class HttpConfig(BaseModel):
+    """HTTP 客户端配置"""
+
+    # 默认校验 SSL：保证 HTTPS 请求的证书合法性。
+    # 仅在内网自签名证书、自托管服务（如 SearXNG/Firecrawl）等场景下显式关闭。
+    verify_ssl: bool = Field(default=True, description="是否校验 SSL 证书（默认校验，可关闭以兼容自签名证书）")
+
+
 class Config(BaseModel):
     """全局配置"""
 
@@ -55,6 +63,7 @@ class Config(BaseModel):
     )
     mode: ModeConfig = Field(default_factory=ModeConfig, description="运行模式")
     fallback: FallbackConfig = Field(default_factory=FallbackConfig, description="回退配置")
+    http: HttpConfig = Field(default_factory=HttpConfig, description="HTTP 客户端配置")
     database: DatabaseConfig = Field(default_factory=DatabaseConfig, description="数据库配置")
 
     # 兼容旧配置文件中的 providers 字段

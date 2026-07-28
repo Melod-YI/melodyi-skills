@@ -2,7 +2,7 @@
 
 from pathlib import Path
 import pytest
-from melodyi_web.infrastructure.config.config_schema import Config, ModeConfig, FallbackConfig
+from melodyi_web.infrastructure.config.config_schema import Config, ModeConfig, FallbackConfig, HttpConfig
 
 
 class TestConfig:
@@ -51,6 +51,29 @@ class TestConfig:
         fallback = FallbackConfig()
         assert fallback.retry_count == 2
         assert fallback.retry_delay_ms == 1000
+
+    def test_http_config_default_verify_ssl(self):
+        """测试 HttpConfig 默认校验 SSL
+
+        回归保护：默认必须为 True（校验 SSL），仅在显式配置时关闭。
+        """
+        http = HttpConfig()
+        assert http.verify_ssl is True
+
+    def test_http_config_disable_verify_ssl(self):
+        """测试 HttpConfig 显式关闭 SSL 校验"""
+        http = HttpConfig(verify_ssl=False)
+        assert http.verify_ssl is False
+
+    def test_config_http_default(self):
+        """测试 Config 默认带 http 配置且默认校验 SSL"""
+        config = Config()
+        assert config.http.verify_ssl is True
+
+    def test_config_http_from_dict(self):
+        """测试从字典加载 http 配置（关闭 SSL 校验）"""
+        config = Config(**{"http": {"verify_ssl": False}})
+        assert config.http.verify_ssl is False
 
     def test_providers_order_preserved(self):
         """测试供应商顺序保留"""
