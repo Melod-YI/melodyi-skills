@@ -196,3 +196,149 @@ class TestConfigFileLocation:
         config = load_config()
         assert config.api_key == "located-without-cwd"
 
+
+
+class TestMultiProviderConfig:
+    """多供应商配置：providers 映射 + active_provider 切换。"""
+
+    def test_switch_by_active_provider(self, tmp_path, monkeypatch):
+        """改 active_provider 一个字段即切换供应商。"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "active_provider": "openrouter",
+            "providers": {
+                "openrouter": {"api_key": "or-key", "api_base": "https://openrouter.ai/api/v1/", "model": "xiaomi/mimo-v2.5"},
+                "openai": {"api_key": "oai-key", "api_base": "https://api.openai.com/v1", "model": "gpt-4o"},
+            },
+        }))
+        config = load_config(config_path=str(cfg))
+        assert config.api_key == "or-key"
+        assert config.api_base == "https://openrouter.ai/api/v1/"
+        assert config.model == "xiaomi/mimo-v2.5"
+        assert config.active_provider == "openrouter"
+
+        # 切换到 openai：只改 active_provider
+        cfg.write_text(json.dumps({
+            "active_provider": "openai",
+            "providers": {
+                "openrouter": {"api_key": "or-key", "api_base": "https://openrouter.ai/api/v1/", "model": "xiaomi/mimo-v2.5"},
+                "openai": {"api_key": "oai-key", "api_base": "https://api.openai.com/v1", "model": "gpt-4o"},
+            },
+        }))
+        config2 = load_config(config_path=str(cfg))
+        assert config2.api_key == "oai-key"
+        assert config2.model == "gpt-4o"
+        assert config2.active_provider == "openai"
+
+    def test_per_profile_max_tokens_override(self, tmp_path, monkeypatch):
+        """profile 显式 max_tokens 覆盖顶层默认。"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "active_provider": "openrouter",
+            "max_tokens": 4096,
+            "providers": {
+                "openrouter": {"api_key": "k", "api_base": "https://x", "model": "m", "max_tokens": 102400},
+                "openai": {"api_key": "k2", "api_base": "https://y", "model": "gpt-4o"},
+            },
+        }))
+        config = load_config(config_path=str(cfg))
+        assert config.max_tokens == 102400
+
+        # openai 未带 max_tokens，回退顶层 4096
+        cfg.write_text(json.dumps({
+            "active_provider": "openai",
+            "max_tokens": 4096,
+            "providers": {
+                "openrouter": {"api_key": "k", "api_base": "https://x", "model": "m", "max_tokens": 102400},
+                "openai": {"api_key": "k2", "api_base": "https://y", "model": "gpt-4o"},
+            },
+        }))
+        config2 = load_config(config_path=str(cfg))
+        assert config2.max_tokens == 4096
+
+    def test_per_profile_stream_override(self, tmp_path, monkeypatch):
+        """profile 显式 stream 覆盖顶层默认。"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "active_provider": "openai",
+            "stream": True,
+            "providers": {
+                "openai": {"api_key": "k", "api_base": "https://y", "model": "gpt-4o", "stream": False},
+            },
+        }))
+        config = load_config(config_path=str(cfg))
+        assert config.stream is False
+
+    def test_active_provider_not_in_providers_exits(self, tmp_path, monkeypatch):
+        """active_provider 指向不存在的 profile 应报错退出。"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "active_provider": "nonexistent",
+            "providers": {"openai": {"api_key": "k", "api_base": "https://y", "model": "gpt-4o"}},
+        }))
+        with pytest.raises(SystemExit):
+            load_config(config_path=str(cfg))
+
+    def test_providers_without_active_provider_exits(self, tmp_path, monkeypatch):
+        """有 providers 但未指定 active_provider 应报错退出。"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "providers": {"openai": {"api_key": "k", "api_base": "https://y", "model": "gpt-4o"}},
+        }))
+        with pytest.raises(SystemExit):
+            load_config(config_path=str(cfg))
+
+    def test_flat_config_backward_compat(self, tmp_path, monkeypatch):
+        """无 providers 段时回退扁平结构（向后兼容）。"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "api_key": "flat-key",
+            "api_base": "https://api.openai.com/v1",
+            "model": "gpt-4o",
+        }))
+        config = load_config(config_path=str(cfg))
+        assert config.api_key == "flat-key"
+        assert config.api_base == "https://api.openai.com/v1"
+        assert config.model == "gpt-4o"
+        assert config.active_provider is None
+
+
+class TestVerifySslConfig:
+    """SSL 校验开关：默认 True，可经配置文件/环境变量关闭。"""
+
+    def test_default_verify_ssl_is_true(self, monkeypatch, no_config_file):
+        monkeypatch.setenv("VISION_API_KEY", "k")
+        monkeypatch.delenv("VISION_VERIFY_SSL", raising=False)
+        assert load_config().verify_ssl is True
+
+    def test_config_file_disables_verify_ssl(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        monkeypatch.delenv("VISION_VERIFY_SSL", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"api_key": "k", "verify_ssl": False}))
+        assert load_config(config_path=str(cfg)).verify_ssl is False
+
+    def test_config_file_string_false_is_coerced(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        monkeypatch.delenv("VISION_VERIFY_SSL", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"api_key": "k", "verify_ssl": "false"}))
+        assert load_config(config_path=str(cfg)).verify_ssl is False
+
+    def test_env_var_disables_verify_ssl(self, monkeypatch, no_config_file):
+        monkeypatch.setenv("VISION_API_KEY", "k")
+        monkeypatch.setenv("VISION_VERIFY_SSL", "false")
+        assert load_config().verify_ssl is False
+
+    def test_env_var_overrides_config_file_verify_ssl(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"api_key": "k", "verify_ssl": False}))
+        monkeypatch.setenv("VISION_VERIFY_SSL", "true")
+        assert load_config(config_path=str(cfg)).verify_ssl is True

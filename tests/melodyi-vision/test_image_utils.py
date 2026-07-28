@@ -82,3 +82,64 @@ class TestLoadUrl:
         monkeypatch.setattr("image_utils.urllib.request.urlopen", fake_urlopen)
         with pytest.raises(SystemExit):
             load_image("https://nonexistent.example.com/image.png")
+
+
+class TestVerifySslLoadFromUrl:
+    """verify_ssl 落地到 URL 图片下载。"""
+
+    def test_default_verify_ssl_passes_no_context(self, monkeypatch):
+        import image_utils
+
+        captured = {}
+
+        class FakeResponse:
+            def read(self):
+                return b"img"
+
+            def getheader(self, name, default=""):
+                return "image/png" if name == "Content-Type" else default
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+        def fake_urlopen(url, timeout=None, **kwargs):
+            captured["kwargs"] = kwargs
+            return FakeResponse()
+
+        monkeypatch.setattr("image_utils.urllib.request.urlopen", fake_urlopen)
+        load_image("https://example.com/test.png")
+        assert "context" not in captured["kwargs"]
+
+    def test_verify_ssl_false_passes_unverified_context(self, monkeypatch):
+        import ssl as _ssl
+
+        import image_utils
+
+        captured = {}
+
+        class FakeResponse:
+            def read(self):
+                return b"img"
+
+            def getheader(self, name, default=""):
+                return "image/png" if name == "Content-Type" else default
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+        def fake_urlopen(url, timeout=None, **kwargs):
+            captured["kwargs"] = kwargs
+            return FakeResponse()
+
+        monkeypatch.setattr("image_utils.urllib.request.urlopen", fake_urlopen)
+        load_image("https://example.com/test.png", verify_ssl=False)
+        ctx = captured["kwargs"].get("context")
+        assert ctx is not None
+        assert ctx.check_hostname is False
+        assert ctx.verify_mode == _ssl.CERT_NONE

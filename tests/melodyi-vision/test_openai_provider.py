@@ -240,3 +240,69 @@ class TestOpenAIProviderErrors:
         provider = self._make_provider()
         with pytest.raises(SystemExit):
             provider.understand("data", "image/png", "describe")
+
+
+class TestOpenAIProviderVerifySsl:
+    """verify_ssl 开关落地到 urlopen：默认不传 context；关闭时传 unverified context。"""
+
+    def _stream_response(self, chunks):
+        import io
+
+        class FakeResponse:
+            def __init__(self):
+                self._lines = [
+                    (b'data: ' + json.dumps({"choices": [{"delta": {"content": c}}]}).encode())
+                    for c in chunks
+                ] + [b'data: [DONE]']
+
+            def __iter__(self):
+                return iter(self._lines)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+        return FakeResponse()
+
+    def test_default_verify_ssl_passes_no_context(self, monkeypatch):
+        """verify_ssl 默认 True：urlopen 不应收到 context kwarg（保持 urllib 默认校验）。"""
+        captured = {}
+
+        def fake_urlopen(req, data=None, timeout=None, **kwargs):
+            captured["kwargs"] = kwargs
+            return self._stream_response(["ok"])
+
+        monkeypatch.setattr(
+            "providers.openai_provider.urllib.request.urlopen", fake_urlopen
+        )
+        provider = OpenAIProvider(
+            api_key="k", api_base="https://api.openai.com/v1", model="gpt-4o", max_tokens=1024
+        )
+        provider.understand("data", "image/png", "describe")
+        assert "context" not in captured["kwargs"]
+
+    def test_verify_ssl_false_passes_unverified_context(self, monkeypatch):
+        """verify_ssl=False：urlopen 应收到 unverified SSL context。"""
+        import ssl as _ssl
+
+        captured = {}
+
+        def fake_urlopen(req, data=None, timeout=None, **kwargs):
+            captured["kwargs"] = kwargs
+            return self._stream_response(["ok"])
+
+        monkeypatch.setattr(
+            "providers.openai_provider.urllib.request.urlopen", fake_urlopen
+        )
+        provider = OpenAIProvider(
+            api_key="k", api_base="https://api.openai.com/v1", model="gpt-4o",
+            max_tokens=1024, verify_ssl=False,
+        )
+        provider.understand("data", "image/png", "describe")
+        ctx = captured["kwargs"].get("context")
+        assert ctx is not None
+        # unverified context 的标志：check_hostname 为 False 且 verify_mode 为 CERT_NONE
+        assert ctx.check_hostname is False
+        assert ctx.verify_mode == _ssl.CERT_NONE

@@ -47,6 +47,8 @@ Priority: CLI arguments > environment variables > config file > defaults.
 | Max Tokens | `VISION_MAX_TOKENS` | `max_tokens` | `1024` |
 | Provider | `VISION_PROVIDER` | `provider` | `openai` |
 | 流式调用 | `VISION_STREAM` | `stream` | `true` |
+| SSL 校验 | `VISION_VERIFY_SSL` | `verify_ssl` | `true` |
+| 当前供应商 | `VISION_ACTIVE_PROVIDER` | `active_provider` | (无) |
 
 Config file locations (checked in order; all resolved independent of the current working directory — you can run the script from any drive/directory):
 1. `--config <path>` (CLI argument)
@@ -63,11 +65,44 @@ Config file format:
   "model": "gpt-4o",
   "max_tokens": 1024,
   "provider": "openai",
-  "stream": true
+  "stream": true,
+  "verify_ssl": true
 }
 ```
 
 > **流式调用**：默认 `stream: true`，以 SSE 方式请求并在内部累加 `delta.content` 后返回完整文本，可降低首 token 延迟、避免长输出超时。若上游 API 不支持流式或需一次性返回，可经 `VISION_STREAM=false`、配置文件 `"stream": false` 或 CLI `--no-stream` 切回非流式。
+
+> **SSL 校验**：默认 `verify_ssl: true` 校验 HTTPS 证书。仅在内网自签名证书、自托管网关等场景下设为 `false` 关闭校验。
+
+### 多供应商配置（推荐）
+
+所有 OpenAI 兼容接口都复用同一 provider 实现，可在 `providers` 里保留多份配置，通过改 `active_provider` 一个字段切换供应商：
+```json
+{
+  "active_provider": "openrouter",
+  "verify_ssl": true,
+  "stream": true,
+  "max_tokens": 4096,
+  "providers": {
+    "openrouter": {
+      "api_key": "sk-or-xxx",
+      "api_base": "https://openrouter.ai/api/v1/",
+      "model": "xiaomi/mimo-v2.5",
+      "max_tokens": 102400
+    },
+    "openai": {
+      "api_key": "sk-xxx",
+      "api_base": "https://api.openai.com/v1",
+      "model": "gpt-4o",
+      "stream": false
+    }
+  }
+}
+```
+- 切换供应商 = 改 `active_provider` 为 `providers` 里的某个 key。
+- 每个 profile 含 `api_key`/`api_base`/`model`（必须各不相同）；`max_tokens`/`stream` 可 per-profile 覆盖，缺省回退顶层默认（不同模型限额不同，建议在 profile 里各自指定 `max_tokens`）。
+- `verify_ssl`/`provider` 为全局共享，不 per-profile。
+- 兼容旧配置：无 `providers` 段时回退上面的扁平结构。
 
 ## Examples
 
