@@ -25,7 +25,7 @@ python script/run.py --output . --headed --verbose
 - 配置文件：`~/.melodyi-skills/get-user-location/config.json`（字段 `huawei_username`、`huawei_password`）
 - 也可用 `--config <路径>` 指定任意配置文件
 
-收藏点（可选）存放于独立文件 `~/.melodyi-skills/get-user-location/favorites.json`，JSON 顶层数组，每项 `{"name", "latitude", "longitude"}`。文件缺失或非法时静默忽略，不阻断主流程。详见 `favorites.py` 模块文档与 SKILL.md「收藏点」小节。
+收藏点（可选）存放于独立文件 `~/.melodyi-skills/get-user-location/favorites.json`，JSON 顶层数组，每项 `{"name", "latitude", "longitude", "radius_m"(可选)}`。`radius_m` 挂在经纬度组级（每个采样点独立），缺省/非法回退默认 200m。同一 `name` 可配多个采样经纬度（大地标），命中任意一点即视为在该 name 附近，输出按 name 归并、取最近距离与命中点坐标。文件缺失或非法时静默忽略，不阻断主流程。详见 `favorites.py` 模块文档与 SKILL.md「收藏点」小节。
 
 ## CLI 参数完整参考
 
@@ -62,7 +62,7 @@ python script/run.py --output . --headed --verbose
 详细数据已保存到 C:/workspace/helper/reverse-geocode-response.json（包含省市区行政区划、附近 POI 等信息）
 ```
 
-输出顺序：地址 → 纬度/经度（若有）→ 附近收藏点块（若有命中）→ 不一致警告（若有）→ 文件路径行（若指定 --output）。附近收藏点块在定位点落入某收藏点 200m 内时输出，按距离升序，距离四舍五入到整米；无命中时省略。
+输出顺序：地址 → 纬度/经度（若有）→ 附近收藏点块（若有命中）→ 不一致警告（若有）→ 文件路径行（若指定 --output）。附近收藏点块在定位点落入某收藏点采样点的允许半径内（默认 200m，可对采样点单独配 `radius_m`）时输出，按 name 归并（同名只列一条，取最近距离）、按距离升序、距离四舍五入到整米；无命中时省略。
 
 ### 多次调用与入参不一致
 
@@ -98,7 +98,7 @@ python script/run.py --output . --headed --verbose
 }
 ```
 
-顶层 `location` 取自 reverseGeocode **请求 payload**（即本次查询的输入经纬度），是输出中最真实准确的定位坐标；未捕获到 payload 时该字段省略。`nearby_favorites` 为 200m 内命中的收藏点（按距离升序，每项含 `name`/`latitude`/`longitude`/`distance_m`），仅在命中时注入；未配置收藏点或无命中时该字段省略。
+顶层 `location` 取自 reverseGeocode **请求 payload**（即本次查询的输入经纬度），是输出中最真实准确的定位坐标；未捕获到 payload 时该字段省略。`nearby_favorites` 为命中的收藏点（每个 name 至多一条、按距离升序，每项含 `name`/`latitude`/`longitude`(命中点坐标)/`distance_m`），仅在命中时注入；未配置收藏点或无命中时该字段省略。
 
 ## 错误处理
 
@@ -122,7 +122,7 @@ python script/run.py --output . --headed --verbose
 3. **认证**（`auth.py`）：导航到华为云 → 等待 iframe → 填写登录表单 → 验证登录成功
 4. **拦截**（`interceptor.py`）：被动监听 `reverseGeocode` 响应，按到达顺序收集**每次**调用的响应与请求 payload（POST body，含查询经纬度）→ 点击「查找设备」触发请求 → 静默期等待收集可能的多次调用
 5. **分析 & 提取**（`extractor.py`）：`analyze_captures` 取最新一次捕获为准，并按请求经纬度检测多次调用是否入参不一致 → 解析响应 JSON → 校验 `returnCode` → 提取 `addressDescription` → 从最新请求 payload 提取查询经纬度 → 精简响应（移除无用字段、裁剪 pois）→ 注入顶层 `location` → 保存文件
-6. **收藏点匹配**（`favorites.py`）：`load_favorites` 读取 `favorites.json`（缺失/非法返回空列表）→ `find_nearby_favorites` 用 Haversine 计算定位点与每个收藏点的球面距离，保留 ≤200m 的命中并按距离升序 → 命中时注入 `nearby_favorites` 到 JSON、`format_nearby_favorites` 渲染 stdout 块。仅在有定位坐标时执行；线性扫描 O(n)，无需空间索引。
+6. **收藏点匹配**（`favorites.py`）：`load_favorites` 读取 `favorites.json`（缺失/非法返回空列表；透传可选 `radius_m`，缺省/非法置 None）→ `find_nearby_favorites` 用 Haversine 计算定位点与每个采样点的球面距离，半经取该点 `radius_m`、缺省回退默认 200m，命中后**按 name 归并**保留最近者、跨 name 按距离升序 → 命中时注入 `nearby_favorites` 到 JSON（每项 `name`/`latitude`/`longitude`/`distance_m`，不含 `radius_m`）、`format_nearby_favorites` 渲染 stdout 块。仅在有定位坐标时执行；线性扫描 O(n)，无需空间索引。
 7. **输出**：多次调用且入参不一致时在 stdout 追加警告行；`--verbose` 逐次打印每次请求的时间、入参经纬度、返回地址
 
 **核心设计决策**：网络拦截使用 `page.on("response", callback)` 被动监听，而非 `route.fetch()` 主动拦截（Python 版 Playwright 的 `route.fetch()` 存在 bug）。

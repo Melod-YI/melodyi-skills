@@ -43,7 +43,19 @@ python <skill-path>/script/run.py --output .
 ]
 ```
 
-每条记录需含 `name`（字符串）、`latitude`/`longitude`（数值）。文件不存在或格式非法时静默忽略（不影响定位主流程）；字段缺失或类型非法的单条记录会被跳过。匹配半径固定 200m，多个命中按距离从近到远排序。仅当成功捕获到定位经纬度时才进行匹配。
+每条记录需含 `name`（字符串）、`latitude`/`longitude`（数值），可选 `radius_m`（正数，米）。文件不存在或格式非法时静默忽略（不影响定位主流程）；必填字段缺失或类型非法的单条记录会被跳过，`radius_m` 非法（非正数）时仅回退默认、不丢弃记录。
+
+**大地标（景区等）支持同一 `name` 配多个采样经纬度**：定位落在任意一点的半径内即视为「在该 name 附近」，输出按 name 归并（同名只列一条，取最近距离与命中点坐标）。例如：
+
+```json
+[
+  {"name": "玄武湖", "latitude": 32.07100, "longitude": 118.79500},
+  {"name": "玄武湖", "latitude": 32.06800, "longitude": 118.79200},
+  {"name": "玄武湖", "latitude": 32.07300, "longitude": 118.79800, "radius_m": 300}
+]
+```
+
+**匹配半径**：默认 200m；`radius_m` 挂在**经纬度组级**（每个采样点独立，非 name 级），可对单个采样点单独放宽（如大地标入口设 300m）。缺省/非法时回退 200m。多个命中（不同 name）按距离从近到远排序。仅当成功捕获到定位经纬度时才进行匹配。
 
 ## 读取输出
 
@@ -73,7 +85,7 @@ python <skill-path>/script/run.py --output .
 
 ### 附近收藏点输出
 
-当定位点落在某收藏点 200m 内时，stdout 会在经纬度行之后追加「附近收藏点」块，列出每个命中收藏点的名称与距离（四舍五入到整米），按距离从近到远排序：
+当定位点落在某收藏点采样点的允许半径内时（默认 200m，可对该采样点单独配 `radius_m`），stdout 会在经纬度行之后追加「附近收藏点」块，列出每个命中收藏点的名称与距离（四舍五入到整米），按距离从近到远排序。同一 `name` 配多个采样点时只列一条（取最近距离）：
 
 ```
 用户当前地址: 江苏省南京市雨花台区雨花街道华为南京研究所A区
@@ -131,7 +143,7 @@ python <skill-path>/script/run.py --output .
 | `location` | 顶层经纬度，取自 reverseGeocode **请求 payload**（即本次查询的输入经纬度），是输出中最真实准确的定位坐标；未捕获到 payload 时该字段省略 |
 | `addressComponent` | 结构化行政区划：`adminLevel1`(省)、`adminLevel2`(市)、`adminLevel3`(区)、`adminLevel4`(街道) |
 | `pois` | 附近兴趣点列表（按距离升序，至多 2 个），每个 POI 含 `name`、`address`、`distance`、`poiType`、`location`(经纬度) |
-| `nearby_favorites` | 200m 内命中的收藏点列表（按距离升序），每项含 `name`、`latitude`、`longitude`、`distance_m`(米)；无命中或未配置收藏点时该字段省略 |
+| `nearby_favorites` | 命中的收藏点列表（每个 name 至多一条，按距离升序），每项含 `name`、`latitude`、`longitude`（触发命中的最近采样点坐标）、`distance_m`(米)；无命中或未配置收藏点时该字段省略 |
 
 ## 环境自检与修复
 

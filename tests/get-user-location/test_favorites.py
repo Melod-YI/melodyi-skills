@@ -91,6 +91,77 @@ class TestFindNearbyFavorites:
         favorites.find_nearby_favorites(31.0, 118.0, favs, 200.0)
         assert favs == [{"name": "家", "latitude": 31.0, "longitude": 118.0}]
 
+    # --- 同 name 多点归并（方案3） + per-record 半径（方案1） ---
+
+    def test_same_name_multiple_coords_dedup_nearest(self):
+        """同 name 多点命中只输出一条，距离取最近。"""
+        favs = [
+            {"name": "玄武湖", "latitude": 31.0010, "longitude": 118.0},  # ~111m
+            {"name": "玄武湖", "latitude": 31.0002, "longitude": 118.0},  # ~22m
+            {"name": "玄武湖", "latitude": 31.0005, "longitude": 118.0},  # ~55m
+        ]
+        matches = favorites.find_nearby_favorites(31.0, 118.0, favs, 200.0)
+        assert [m["name"] for m in matches] == ["玄武湖"]
+        assert matches[0]["distance_m"] == pytest.approx(22.3, abs=1.0)
+
+    def test_same_name_only_some_hit(self):
+        """同 name 多点，仅远的带大 radius_m 命中 → 仍输出该 name。"""
+        favs = [
+            {"name": "玄武湖", "latitude": 31.0020, "longitude": 118.0},  # ~222m，默认不中
+            {"name": "玄武湖", "latitude": 31.0020, "longitude": 118.0, "radius_m": 300},
+        ]
+        matches = favorites.find_nearby_favorites(31.0, 118.0, favs, 200.0)
+        assert [m["name"] for m in matches] == ["玄武湖"]
+        assert matches[0]["distance_m"] == pytest.approx(222.6, abs=1.0)
+
+    def test_per_record_radius_overrides_default(self):
+        """点距 ~222m：默认 200 不中、per-record radius_m=300 命中。"""
+        favs = [
+            {"name": "大地标", "latitude": 31.002, "longitude": 118.0, "radius_m": 300}
+        ]
+        # 不传函数形参 → 回退 DEFAULT_RADIUS_M=200；但 per-record 300 优先
+        matches = favorites.find_nearby_favorites(31.0, 118.0, favs)
+        assert [m["name"] for m in matches] == ["大地标"]
+
+    def test_per_record_radius_beats_func_param(self):
+        """per-record radius_m 优先于函数 radius_m 形参。"""
+        favs = [
+            {"name": "大", "latitude": 31.002, "longitude": 118.0, "radius_m": 300}
+        ]
+        # 函数传 200（默认），per-record 300，距离 ~222 → 命中
+        matches = favorites.find_nearby_favorites(31.0, 118.0, favs, 200.0)
+        assert [m["name"] for m in matches] == ["大"]
+
+    def test_func_param_fallback_when_record_none(self):
+        """记录无 radius_m 时回退函数 radius_m 形参（而非硬编码默认）。"""
+        favs = [
+            {"name": "小", "latitude": 31.001, "longitude": 118.0}  # ~111m，无 per-record
+        ]
+        # 函数传 150 → 111 < 150 命中
+        hits = favorites.find_nearby_favorites(31.0, 118.0, favs, 150.0)
+        assert [m["name"] for m in hits] == ["小"]
+        # 函数传 100 → 111 > 100 不中（证明回退到的是形参而非 DEFAULT_RADIUS_M）
+        no_hits = favorites.find_nearby_favorites(31.0, 118.0, favs, 100.0)
+        assert no_hits == []
+
+    def test_dedup_keeps_nearest_coord(self):
+        """归并后 latitude/longitude 是最近命中点的坐标。"""
+        favs = [
+            {"name": "x", "latitude": 31.0010, "longitude": 118.0},  # ~111m 远
+            {"name": "x", "latitude": 31.0002, "longitude": 118.0},  # ~22m 近
+        ]
+        matches = favorites.find_nearby_favorites(31.0, 118.0, favs, 200.0)
+        assert matches[0]["latitude"] == 31.0002
+        assert matches[0]["longitude"] == 118.0
+
+    def test_no_radius_m_key_in_output(self):
+        """输出不暴露 radius_m，仅 name/latitude/longitude/distance_m。"""
+        favs = [
+            {"name": "x", "latitude": 31.0002, "longitude": 118.0, "radius_m": 300}
+        ]
+        matches = favorites.find_nearby_favorites(31.0, 118.0, favs, 200.0)
+        assert set(matches[0].keys()) == {"name", "latitude", "longitude", "distance_m"}
+
 
 class TestLoadFavorites:
     """load_favorites 测试"""
@@ -164,6 +235,48 @@ class TestLoadFavorites:
         favs = favorites.load_favorites(str(f))
         assert len(favs) == 1
         assert favs[0]["latitude"] == 31
+
+    # --- 可选 radius_m（方案1：per-record 半径，经纬度组级而非 name 级） ---
+
+    def test_loads_per_record_radius(self, tmp_path):
+        """正数 radius_m 透传进内存对象。"""
+        f = tmp_path / "favorites.json"
+        f.write_text(
+            json.dumps(
+                [{"name": "玄武湖", "latitude": 32.07, "longitude": 118.79, "radius_m": 300}]
+            ),
+            encoding="utf-8",
+        )
+        favs = favorites.load_favorites(str(f))
+        assert favs[0]["radius_m"] == 300
+
+    def test_radius_m_none_when_absent(self, tmp_path):
+        """未配置 radius_m 时内存对象该字段为 None（表示匹配阶段回退默认）。"""
+        f = tmp_path / "favorites.json"
+        f.write_text(
+            json.dumps([{"name": "家", "latitude": 31.98, "longitude": 118.76}]),
+            encoding="utf-8",
+        )
+        favs = favorites.load_favorites(str(f))
+        assert favs[0]["radius_m"] is None
+
+    def test_invalid_radius_m_falls_back(self, tmp_path):
+        """radius_m 非法（字符串/bool/0/负数）时记录保留、radius_m 回退 None。"""
+        f = tmp_path / "favorites.json"
+        f.write_text(
+            json.dumps(
+                [
+                    {"name": "a", "latitude": 31.0, "longitude": 118.0, "radius_m": "big"},
+                    {"name": "b", "latitude": 31.0, "longitude": 118.0, "radius_m": True},
+                    {"name": "c", "latitude": 31.0, "longitude": 118.0, "radius_m": 0},
+                    {"name": "d", "latitude": 31.0, "longitude": 118.0, "radius_m": -5},
+                ]
+            ),
+            encoding="utf-8",
+        )
+        favs = favorites.load_favorites(str(f))
+        assert len(favs) == 4
+        assert all(fav["radius_m"] is None for fav in favs)
 
     def test_default_path_when_none(self, monkeypatch, tmp_path):
         """未传路径时读取 USER_FAVORITES_FILE。"""

@@ -17,6 +17,15 @@
     {"name": "家", "latitude": 31.97951, "longitude": 118.76740},
     {"name": "公司", "latitude": 31.98500, "longitude": 118.77000}
   ]
+
+大地标（景区等）支持同一 name 配多个采样经纬度：定位命中任意一点即视为在该
+name 附近，输出按 name 归并、取最近距离。每个采样点可单独配置 radius_m
+（经纬度组级，非 name 级）作为该点专属允许距离，缺省/非法时回退默认 200m：
+  [
+    {"name": "玄武湖", "latitude": 32.07100, "longitude": 118.79500},
+    {"name": "玄武湖", "latitude": 32.06800, "longitude": 118.79200},
+    {"name": "玄武湖", "latitude": 32.07300, "longitude": 118.79800, "radius_m": 300}
+  ]
 """
 
 import json
@@ -81,8 +90,25 @@ def load_favorites(path: Optional[str] = None) -> List[Dict[str, Any]]:
         if not isinstance(longitude, (int, float)) or isinstance(longitude, bool):
             logger.warning("收藏点 #%d longitude 非数值，已跳过", idx)
             continue
+        # 可选 radius_m：该采样点专属允许距离（经纬度组级，非 name 级）。
+        # 缺省/非法时置 None，匹配阶段回退 DEFAULT_RADIUS_M，保证默认值单一来源。
+        radius_m = item.get("radius_m")
+        if radius_m is not None and (
+            not isinstance(radius_m, (int, float))
+            or isinstance(radius_m, bool)
+            or radius_m <= 0
+        ):
+            logger.warning(
+                "收藏点 #%d radius_m 非法（需为正数），回退默认: %r", idx, radius_m
+            )
+            radius_m = None
         favorites.append(
-            {"name": name, "latitude": latitude, "longitude": longitude}
+            {
+                "name": name,
+                "latitude": latitude,
+                "longitude": longitude,
+                "radius_m": radius_m,
+            }
         )
 
     logger.info("加载收藏点 %d 个", len(favorites))
@@ -119,7 +145,12 @@ def find_nearby_favorites(
     favorites: List[Dict[str, Any]],
     radius_m: float = DEFAULT_RADIUS_M,
 ) -> List[Dict[str, Any]]:
-    """返回距给定坐标 ≤ radius_m 的收藏点，按距离从近到远排序。
+    """返回距给定坐标在各自允许半径内的收藏点，按距离从近到远排序。
+
+    大地标（景区等）可在 favorites.json 中以同一 name 配多个采样经纬度，
+    命中任意一点即视为在该 name 附近；同 name 多点命中时只保留最近者。
+    每个采样点可单独配置 radius_m（经纬度组级，非 name 级），缺省时回退
+    本函数的 radius_m 形参（默认 DEFAULT_RADIUS_M）。
 
     性能: 线性扫描 O(n)，单次 Haversine 约 1µs 量级，1000 个收藏点 < 1ms，
     远小于收藏点文件的磁盘读取耗时，无需空间索引。
@@ -127,19 +158,32 @@ def find_nearby_favorites(
     Args:
         latitude, longitude: 当前定位坐标（度）
         favorites: load_favorites 返回的收藏点列表
-        radius_m: 匹配半径（米），默认 200
+        radius_m: 匹配半径回退默认值（米），仅当收藏点未配置自身 radius_m 时生效
 
     Returns:
-        命中收藏点列表（深拷贝，附加 distance_m 字段，按距离升序）；
-        无命中返回空列表。不修改入参。
+        命中收藏点列表（每个 name 至多一条，附加 distance_m 字段，按距离升序，
+        latitude/longitude 为触发命中的最近采样点坐标）；无命中返回空列表。不修改入参。
     """
-    matches: List[Dict[str, Any]] = []
+    # 按 name 归并：同 name 多点命中只保留 distance_m 最小者（并列取遍历序首个）。
+    nearest_by_name: Dict[str, Dict[str, Any]] = {}
     for fav in favorites:
+        rec_radius = fav.get("radius_m")
+        effective_radius = rec_radius if rec_radius is not None else radius_m
         dist = haversine_distance_m(
             latitude, longitude, fav["latitude"], fav["longitude"]
         )
-        if dist <= radius_m:
-            matches.append({**fav, "distance_m": dist})
+        if dist > effective_radius:
+            continue
+        name = fav["name"]
+        existing = nearest_by_name.get(name)
+        if existing is None or dist < existing["distance_m"]:
+            nearest_by_name[name] = {
+                "name": name,
+                "latitude": fav["latitude"],
+                "longitude": fav["longitude"],
+                "distance_m": dist,
+            }
+    matches = list(nearest_by_name.values())
     matches.sort(key=lambda m: m["distance_m"])
     return matches
 
