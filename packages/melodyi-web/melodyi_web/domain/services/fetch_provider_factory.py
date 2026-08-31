@@ -29,18 +29,6 @@ class FetchProviderFactory:
         "exa-contents": ExaContentsProvider,
     }
 
-    # 兼容旧名称
-    _LEGACY_NAMES: dict[str, str] = {
-        "jina-reader": "jina",
-    }
-
-    @classmethod
-    def _resolve_name(cls, name: str) -> str:
-        """解析供应商名称（兼容旧名称）"""
-        if name in cls._LEGACY_NAMES:
-            return cls._LEGACY_NAMES[name]
-        return name
-
     @classmethod
     def create(cls, config: FetchProviderConfig) -> BaseFetchProvider:
         """创建单个供应商实例
@@ -54,7 +42,7 @@ class FetchProviderFactory:
         Raises:
             ValueError: 不支持的供应商名称
         """
-        provider_name = cls._resolve_name(config.name)
+        provider_name = config.name
 
         if provider_name not in cls._PROVIDER_MAP:
             raise ValueError(f"不支持的 Fetch 供应商: {config.name}")

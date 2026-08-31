@@ -37,7 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.env` | API Key 等敏感信息 |
 
 **Fetch 默认供应商**（无需配置）：
-- `jina-reader` — 无需 API Key，支持 JS 渲染
+- `jina` — 无需 API Key，支持 JS 渲染
 - `markdown-new` — 无需 API Key
 
 ## 架构
@@ -88,7 +88,7 @@ melodyi_web/
 ## 提供商注意事项
 
 - **MiniMax CN**: API 不支持时间过滤，通过注入中文关键词（"今天 最新"）模拟；域名过滤通过 `urlparse` 后处理
-- **FetchProviderFactory**: 存在遗留名称映射 `"jina-reader"` → `"jina"`
+- **FetchProviderFactory**: 抓取供应商名称统一为 `jina`（`FetchProviderConfig` 的 Literal 仅接受 `jina`，旧名 `jina-reader` 会在构造时被拒绝）
 - **Config 向后兼容**: 旧 `providers` 字段自动迁移到 `search_providers`（使用 `object.__setattr__` 绕过 Pydantic frozen）
 
 ## 测试模式

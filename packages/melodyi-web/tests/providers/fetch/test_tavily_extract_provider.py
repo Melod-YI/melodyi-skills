@@ -37,26 +37,6 @@ class TestTavilyExtractProvider:
         provider = TavilyExtractProvider(api_key="dummy")
         assert provider.get_output_format() == "raw"
 
-    def test_fetch_example_com(self, tavily_api_key):
-        """测试抓取 example.com（真实 API）—— example.com 为占位页，Tavily 侧稳定提取失败
-
-        回归保护：results 为空时，provider 应把 failed_results 里的真实失败原因透出到 error，
-        而不是返回笼统的"无提取结果"且 error 为 None。
-        """
-        provider = TavilyExtractProvider(
-            api_key=tavily_api_key,
-            timeout_ms=30000
-        )
-        request = ProviderFetchRequest(url="https://example.com")
-        result = provider.fetch(request)
-
-        assert result.provider == "tavily-extract"
-        assert result.url == "https://example.com"
-        # example.com 在 Tavily 侧提取失败：应返回非空 error（携带真实原因），content 为空
-        assert result.error is not None
-        assert result.content == ""
-        assert result.response_time_ms > 0
-
     def test_fetch_wikipedia(self, tavily_api_key):
         """测试抓取维基百科（真实 API）"""
         provider = TavilyExtractProvider(

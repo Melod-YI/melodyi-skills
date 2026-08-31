@@ -1,6 +1,6 @@
 ---
 name: melodyi-web-fetch
-description: "Fetch and extract web page content as markdown using melodyi-web CLI. Use this skill whenever you need to read, extract, or scrape content from a specific URL. This includes: reading articles, extracting documentation, converting web pages to readable format, getting page content for analysis, or when the user pastes a URL and asks 'what does this page say'. The default providers (jina-reader, markdown-new) work without any API key configuration. Prefer this over direct HTTP requests when you need clean, readable content from a web page."
+description: "Fetch and extract web page content as markdown using melodyi-web CLI. Use this skill whenever you need to read, extract, or scrape content from a specific URL. This includes: reading articles, extracting documentation, converting web pages to readable format, getting page content for analysis, or when the user pastes a URL and asks 'what does this page say'. The default providers (jina, markdown-new) work without any API key configuration. Prefer this over direct HTTP requests when you need clean, readable content from a web page."
 ---
 
 # melodyi-web fetch — 网页内容抓取工具
@@ -23,19 +23,19 @@ melodyi-web fetch https://example.com
 
 | 提供商 | 说明 | 需要 API Key | 特点 |
 |--------|------|:---:|------|
-| `jina-reader` | Jina Reader | ❌（可选） | 支持 JS 渲染，输出 Markdown，功能最丰富 |
+| `jina` | Jina Reader | ❌（可选） | 支持 JS 渲染，输出 Markdown，功能最丰富 |
 | `markdown-new` | Markdown.new | ❌ | 最简洁，纯 Markdown 转换 |
 | `tavily-extract` | Tavily Extract | ✅ | 支持深度提取，可处理动态页面 |
 | `exa-contents` | Exa Contents | ✅ | 内容提取，适合结构化数据 |
 
-如果不确定用哪个，不指定 `-p` 即可——系统默认使用 `jina-reader` 和 `markdown-new`，两者都不需要配置。
+如果不确定用哪个，不指定 `-p` 即可——系统默认使用 `jina` 和 `markdown-new`，两者都不需要配置。
 
 ```bash
 # 使用默认提供商（推荐日常使用）
 melodyi-web fetch https://docs.python.org/3/tutorial/
 
 # 指定 Jina Reader（需要 JS 渲染的页面）
-melodyi-web fetch https://spa-app.com/page -p jina-reader
+melodyi-web fetch https://spa-app.com/page -p jina
 
 # 指定 Tavily Extract（需要深度提取）
 melodyi-web fetch https://example.com -p tavily-extract
@@ -85,7 +85,7 @@ melodyi-web fetch https://react.dev/reference/react
 对于使用 JavaScript 动态渲染内容的 SPA 应用，Jina Reader 支持浏览器引擎渲染：
 
 ```bash
-melodyi-web fetch https://dynamic-site.com -p jina-reader
+melodyi-web fetch https://dynamic-site.com -p jina
 ```
 
 ## 错误处理
@@ -96,11 +96,11 @@ melodyi-web fetch https://dynamic-site.com -p jina-reader
 - **"Network connection error"** — 检查网络连接
 - **"All providers failed"** — 所有提供商都失败了，可能是目标网站不可访问
 
-遇到超时时，换一个提供商（如从 `markdown-new` 换到 `jina-reader`）通常能解决问题。Jina Reader 有 JS 渲染能力，对于动态页面更可靠。
+遇到超时时，换一个提供商（如从 `markdown-new` 换到 `jina`）通常能解决问题。Jina Reader 有 JS 渲染能力，对于动态页面更可靠。
 
 ## 配置
 
-默认的 `jina-reader` 和 `markdown-new` 提供商无需任何配置即可使用。如果需要配置其他提供商（如 `tavily-extract`），编辑 `~/.melodyi-skills/melodyi-web/config.yaml`：
+默认的 `jina` 和 `markdown-new` 提供商无需任何配置即可使用。如果需要配置其他提供商（如 `tavily-extract`），编辑 `~/.melodyi-skills/melodyi-web/config.yaml`：
 
 ```bash
 # 生成默认配置文件

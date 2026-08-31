@@ -246,7 +246,7 @@ def fetch(
 
     示例:
         melodyi-web fetch https://example.com
-        melodyi-web fetch https://example.com --provider jina-reader
+        melodyi-web fetch https://example.com --provider jina
         melodyi-web fetch https://example.com --comparison
     """
     try:
@@ -274,7 +274,7 @@ def fetch(
         else:
             # 内置默认（已在 config_loader 中定义）
             provider_configs = [
-                FetchProviderConfig(name="jina-reader"),
+                FetchProviderConfig(name="jina"),
                 FetchProviderConfig(name="markdown-new"),
             ]
 

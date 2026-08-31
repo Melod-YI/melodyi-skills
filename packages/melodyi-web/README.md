@@ -145,7 +145,7 @@ melodyi-web fetch <URL> [选项]
 melodyi-web fetch https://docs.python.org/3/tutorial/
 
 # 指定提供商
-melodyi-web fetch https://spa-app.com -p jina-reader
+melodyi-web fetch https://spa-app.com -p jina
 
 # JSON 输出
 melodyi-web fetch https://example.com -o json
@@ -177,7 +177,7 @@ melodyi-web fetch https://example.com -c
 
 | 提供商 | 需要 API Key | JS 渲染 | 说明 |
 |--------|:---:|:---:|------|
-| `jina-reader` | ❌（可选） | ✅ | 功能最丰富，支持 `engine: browser` JS 渲染 |
+| `jina` | ❌（可选） | ✅ | 功能最丰富，支持 `engine: browser` JS 渲染 |
 | `markdown-new` | ❌ | ❌ | 最简洁，纯 Markdown 转换 |
 | `tavily-extract` | ✅ | ✅ | 深度提取，支持 `extract_depth: advanced` |
 | `exa-contents` | ✅ | ❌ | 内容提取 |
