@@ -17,7 +17,8 @@ class OpenAIProvider(BaseProvider):
     """
 
     def __init__(self, api_key: str, api_base: str, model: str, max_tokens: int,
-                 stream: bool = True, verify_ssl: bool = True):
+                 stream: bool = True, verify_ssl: bool = True,
+                 proxy: str = None):
         self.api_key = api_key
         self.api_base = api_base.rstrip("/")
         self.model = model
@@ -25,6 +26,8 @@ class OpenAIProvider(BaseProvider):
         self.stream = stream
         # verify_ssl=True 走 urllib 默认校验；False 用未校验 context 兼容自签名证书
         self.verify_ssl = verify_ssl
+        # HTTP 代理（如 http://127.0.0.1:7890）；None 表示未配置，走 urllib 默认行为
+        self.proxy = proxy
 
     def _ssl_context(self):
         """返回要传给 urlopen 的 SSL context；True 时返回 None 表示用默认校验。"""
@@ -82,14 +85,27 @@ class OpenAIProvider(BaseProvider):
         )
 
         try:
-            # verify_ssl=True 时 context 为 None，不传 context kwarg，保持与默认行为一致
-            ctx = self._ssl_context()
-            if ctx is None:
-                resp = urllib.request.urlopen(req, data=encoded_body, timeout=120)
+            if self.proxy is None:
+                # 未配置代理：直接 urlopen（保持默认行为，与既有测试 monkeypatch 点兼容）
+                # verify_ssl=True 时 context 为 None，不传 context kwarg，保持与默认行为一致
+                ctx = self._ssl_context()
+                if ctx is None:
+                    resp = urllib.request.urlopen(req, data=encoded_body, timeout=120)
+                else:
+                    resp = urllib.request.urlopen(
+                        req, data=encoded_body, timeout=120, context=ctx
+                    )
             else:
-                resp = urllib.request.urlopen(
-                    req, data=encoded_body, timeout=120, context=ctx
-                )
+                # 配置了代理：经 ProxyHandler 构造 opener；opener.open 不接受
+                # context kwarg，关闭 SSL 校验场景经 HTTPSHandler 挂进 opener
+                handlers = [
+                    urllib.request.ProxyHandler({"http": self.proxy, "https": self.proxy})
+                ]
+                ctx = self._ssl_context()
+                if ctx is not None:
+                    handlers.append(urllib.request.HTTPSHandler(context=ctx))
+                opener = urllib.request.build_opener(*handlers)
+                resp = opener.open(req, data=encoded_body, timeout=120)
         except urllib.error.HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")
             print(f"Error: API returned {exc.code}: {error_body}", file=sys.stderr)

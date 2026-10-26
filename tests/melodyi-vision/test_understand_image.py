@@ -132,3 +132,45 @@ class TestMainIntegration:
         with pytest.raises(SystemExit):
             from understand_image import main
             main(["/nonexistent/path/image.png"])
+
+
+class TestProxyWiring:
+    """main 应把配置文件的 proxy 透传给 load_image 与 get_provider。"""
+
+    def test_proxy_passed_to_provider_and_loader(self, tmp_path, monkeypatch):
+        import json
+
+        import understand_image
+
+        img_file = tmp_path / "test.png"
+        img_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"fake png data")
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "api_key": "k",
+            "proxy": "http://127.0.0.1:7890",
+        }))
+
+        captured = {}
+
+        def fake_load_image(source, verify_ssl=True, proxy=None):
+            captured["load_image"] = {
+                "source": source, "verify_ssl": verify_ssl, "proxy": proxy,
+            }
+            return ("ZmFrZQ==", "image/png")
+
+        class MockProvider:
+            def understand(self, image_data, mime_type, prompt):
+                return "ok"
+
+        def fake_get_provider(name, **kwargs):
+            captured["kwargs"] = kwargs
+            return MockProvider()
+
+        monkeypatch.setattr(understand_image, "load_image", fake_load_image)
+        monkeypatch.setattr(understand_image, "get_provider", fake_get_provider)
+        monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+        understand_image.main([str(img_file), "--config", str(cfg)])
+
+        assert captured["load_image"]["proxy"] == "http://127.0.0.1:7890"
+        assert captured["kwargs"].get("proxy") == "http://127.0.0.1:7890"

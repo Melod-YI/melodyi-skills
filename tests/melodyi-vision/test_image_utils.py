@@ -143,3 +143,102 @@ class TestVerifySslLoadFromUrl:
         assert ctx is not None
         assert ctx.check_hostname is False
         assert ctx.verify_mode == _ssl.CERT_NONE
+
+
+class TestProxyLoadFromUrl:
+    """proxy 落地到 URL 图片下载：默认走 urlopen；配置代理后走 opener。"""
+
+    class _FakeResponse:
+        def read(self):
+            return b"img"
+
+        def getheader(self, name, default=""):
+            return "image/png" if name == "Content-Type" else default
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def test_no_proxy_keeps_urlopen(self, monkeypatch):
+        """未配置代理：只走 urlopen，不构造 opener（保持默认行为与 monkeypatch 兼容）。"""
+        urlopen_called = []
+
+        def fake_urlopen(url, timeout=None, **kwargs):
+            urlopen_called.append(url)
+            return self._FakeResponse()
+
+        def fail_build_opener(*args, **kwargs):
+            raise AssertionError("未配置代理不应构造 opener")
+
+        monkeypatch.setattr("image_utils.urllib.request.urlopen", fake_urlopen)
+        monkeypatch.setattr("image_utils.urllib.request.build_opener", fail_build_opener)
+        load_image("https://example.com/test.png")
+        assert len(urlopen_called) == 1
+
+    def test_proxy_uses_opener(self, monkeypatch):
+        """配置代理：经 build_opener(ProxyHandler) 构造 opener 下载，不再走 urlopen。"""
+        import urllib.request
+
+        captured = {}
+
+        class FakeOpener:
+            def open(self, url, timeout=None):
+                captured["url"] = url
+                captured["timeout"] = timeout
+                return TestProxyLoadFromUrl._FakeResponse()
+
+        def fake_build_opener(*handlers):
+            captured["handlers"] = handlers
+            return FakeOpener()
+
+        def fail_urlopen(*args, **kwargs):
+            raise AssertionError("配置代理后不应再走 urlopen")
+
+        monkeypatch.setattr("image_utils.urllib.request.build_opener", fake_build_opener)
+        monkeypatch.setattr("image_utils.urllib.request.urlopen", fail_urlopen)
+        b64_data, mime_type = load_image(
+            "https://example.com/test.png", proxy="http://127.0.0.1:7890"
+        )
+        assert b64_data == base64.b64encode(b"img").decode("utf-8")
+        assert mime_type == "image/png"
+        assert captured["timeout"] == 30
+        proxy_handlers = [
+            h for h in captured["handlers"]
+            if isinstance(h, urllib.request.ProxyHandler)
+        ]
+        assert len(proxy_handlers) == 1
+        assert proxy_handlers[0].proxies == {
+            "http": "http://127.0.0.1:7890",
+            "https": "http://127.0.0.1:7890",
+        }
+
+    def test_proxy_with_verify_ssl_false_adds_https_handler(self, monkeypatch):
+        """代理 + 关闭 SSL 校验：handlers 里应含 HTTPSHandler（挂 unverified context）。"""
+        import urllib.request
+
+        captured = {}
+
+        class FakeOpener:
+            def open(self, url, timeout=None):
+                return TestProxyLoadFromUrl._FakeResponse()
+
+        def fake_build_opener(*handlers):
+            captured["handlers"] = handlers
+            return FakeOpener()
+
+        monkeypatch.setattr("image_utils.urllib.request.build_opener", fake_build_opener)
+        monkeypatch.setattr(
+            "image_utils.urllib.request.urlopen",
+            lambda *a, **k: (_ for _ in ()).throw(AssertionError("不应走 urlopen")),
+        )
+        load_image(
+            "https://example.com/test.png",
+            verify_ssl=False, proxy="http://127.0.0.1:7890",
+        )
+        https_handlers = [
+            h for h in captured["handlers"]
+            if isinstance(h, urllib.request.HTTPSHandler)
+        ]
+        assert len(https_handlers) == 1

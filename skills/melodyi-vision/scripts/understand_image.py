@@ -47,7 +47,9 @@ def main(args=None):
         config_path=parsed.config,
     )
 
-    image_data, mime_type = load_image(parsed.image_source, verify_ssl=config.verify_ssl)
+    image_data, mime_type = load_image(
+        parsed.image_source, verify_ssl=config.verify_ssl, proxy=config.proxy
+    )
 
     provider = get_provider(
         config.provider,
@@ -57,6 +59,7 @@ def main(args=None):
         max_tokens=config.max_tokens,
         stream=config.stream,
         verify_ssl=config.verify_ssl,
+        proxy=config.proxy,
     )
 
     result = provider.understand(image_data, mime_type, parsed.prompt)

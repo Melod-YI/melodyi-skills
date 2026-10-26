@@ -36,6 +36,9 @@ class VisionConfig:
     stream: bool = True
     # 是否校验 SSL 证书（默认校验）；仅在内网自签名证书、自托管网关等场景下关闭
     verify_ssl: bool = True
+    # HTTP 代理地址（如 http://127.0.0.1:7890），API 调用与图片下载均走该代理；
+    # 全局共享不 per-profile，无专用环境变量；None 表示未配置（走 urllib 默认行为）
+    proxy: Optional[str] = None
     # 当前生效的供应商 profile 名（多供应商配置时由 active_provider 解析得到，便于排障/日志）
     active_provider: Optional[str] = None
 
@@ -142,6 +145,10 @@ def load_config(cli_overrides: Optional[dict] = None, config_path: Optional[str]
         values["verify_ssl"] = _parse_bool(values["verify_ssl"])
     if "stream" in values:
         values["stream"] = _parse_bool(values["stream"])
+    # proxy 统一 strip；空字符串/纯空白/未配置归一为 None
+    # （与 verify_ssl 一样全局共享，不 per-profile）
+    proxy_value = str(values.get("proxy") or "").strip()
+    values["proxy"] = proxy_value or None
 
     # 解析多供应商 profile（若有）
     providers_map = values.pop("providers", None)
@@ -180,7 +187,7 @@ def load_config(cli_overrides: Optional[dict] = None, config_path: Optional[str]
     # 仅保留 VisionConfig 认识的字段，避免 providers 嵌套 dict 等被传入构造
     known = {
         "api_key", "api_base", "model", "max_tokens",
-        "provider", "stream", "verify_ssl", "active_provider",
+        "provider", "stream", "verify_ssl", "proxy", "active_provider",
     }
     kwargs = {k: v for k, v in values.items() if k in known}
     return VisionConfig(**kwargs)

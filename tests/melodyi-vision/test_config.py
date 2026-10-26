@@ -342,3 +342,54 @@ class TestVerifySslConfig:
         cfg.write_text(json.dumps({"api_key": "k", "verify_ssl": False}))
         monkeypatch.setenv("VISION_VERIFY_SSL", "true")
         assert load_config(config_path=str(cfg)).verify_ssl is True
+
+
+class TestProxyConfig:
+    """HTTP 代理配置：默认 None，可经配置文件设置；全局共享不 per-profile。"""
+
+    def test_default_proxy_is_none(self, monkeypatch, no_config_file):
+        monkeypatch.setenv("VISION_API_KEY", "k")
+        assert load_config().proxy is None
+
+    def test_config_file_sets_proxy(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "api_key": "k",
+            "proxy": "http://127.0.0.1:7890",
+        }))
+        assert load_config(config_path=str(cfg)).proxy == "http://127.0.0.1:7890"
+
+    def test_empty_string_proxy_normalized_to_none(self, tmp_path, monkeypatch):
+        """空字符串/纯空白视作未配置（归一为 None）"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"api_key": "k", "proxy": "   "}))
+        assert load_config(config_path=str(cfg)).proxy is None
+
+    def test_proxy_in_known_whitelist(self, tmp_path, monkeypatch):
+        """回归保护：proxy 必须在 known 白名单里，否则会被静默丢弃"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "api_key": "k",
+            "proxy": "http://127.0.0.1:7890",
+        }))
+        config = load_config(config_path=str(cfg))
+        assert config.proxy == "http://127.0.0.1:7890"
+        assert hasattr(config, "proxy")
+
+    def test_proxy_not_per_profile(self, tmp_path, monkeypatch):
+        """profile 内的 proxy 不被读取：与 verify_ssl 一样全局共享"""
+        monkeypatch.delenv("VISION_API_KEY", raising=False)
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({
+            "api_key": "k",
+            "proxy": "http://global:7890",
+            "active_provider": "p1",
+            "providers": {
+                "p1": {"api_key": "k1", "proxy": "http://profile:1"}
+            },
+        }))
+        config = load_config(config_path=str(cfg))
+        assert config.proxy == "http://global:7890"

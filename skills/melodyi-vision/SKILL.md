@@ -48,6 +48,7 @@ Priority: CLI arguments > environment variables > config file > defaults.
 | Provider | `VISION_PROVIDER` | `provider` | `openai` |
 | 流式调用 | `VISION_STREAM` | `stream` | `true` |
 | SSL 校验 | `VISION_VERIFY_SSL` | `verify_ssl` | `true` |
+| HTTP 代理 | —（无环境变量） | `proxy` | (无) |
 | 当前供应商 | `VISION_ACTIVE_PROVIDER` | `active_provider` | (无) |
 
 Config file locations (checked in order; all resolved independent of the current working directory — you can run the script from any drive/directory):
@@ -66,13 +67,16 @@ Config file format:
   "max_tokens": 1024,
   "provider": "openai",
   "stream": true,
-  "verify_ssl": true
+  "verify_ssl": true,
+  "proxy": "http://127.0.0.1:7890"
 }
 ```
 
 > **流式调用**：默认 `stream: true`，以 SSE 方式请求并在内部累加 `delta.content` 后返回完整文本，可降低首 token 延迟、避免长输出超时。若上游 API 不支持流式或需一次性返回，可经 `VISION_STREAM=false`、配置文件 `"stream": false` 或 CLI `--no-stream` 切回非流式。
 
 > **SSL 校验**：默认 `verify_ssl: true` 校验 HTTPS 证书。仅在内网自签名证书、自托管网关等场景下设为 `false` 关闭校验。
+
+> **HTTP 代理**：可选配置 `"proxy": "http://127.0.0.1:7890"`，配置后 API 调用与 URL 图片下载的 http/https 请求统一走该代理；未配置时走 urllib 默认行为（可读 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量），不设专用环境变量。
 
 ### 多供应商配置（推荐）
 
@@ -101,7 +105,7 @@ Config file format:
 ```
 - 切换供应商 = 改 `active_provider` 为 `providers` 里的某个 key。
 - 每个 profile 含 `api_key`/`api_base`/`model`（必须各不相同）；`max_tokens`/`stream` 可 per-profile 覆盖，缺省回退顶层默认（不同模型限额不同，建议在 profile 里各自指定 `max_tokens`）。
-- `verify_ssl`/`provider` 为全局共享，不 per-profile。
+- `verify_ssl`/`provider`/`proxy` 为全局共享，不 per-profile。
 - 兼容旧配置：无 `providers` 段时回退上面的扁平结构。
 
 ## Examples
