@@ -39,7 +39,11 @@ pip install -e packages/melodyi-filebot
 - 配置文件 `~/.melodyi-skills/melodyi-filebot/config.yaml`：
   ```yaml
   tmdb_api_key: 你的key
+  # 可选：HTTP 代理，TMDB 与 Bangumi 请求都走该代理
+  # proxy: http://127.0.0.1:7890
   ```
+
+`proxy` 未配置时走各 HTTP 库默认行为（可读 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量）。
 
 `~/.melodyi-skills/melodyi-filebot/` 是本工具的统一数据目录，存放配置文件与事务日志快照（`snapshots/` 子目录）。
 

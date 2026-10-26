@@ -44,3 +44,23 @@ def load_tmdb_api_key() -> Optional[str]:
 
     logger.info("TMDB API Key 未配置")
     return None
+
+
+def load_proxy() -> Optional[str]:
+    """读取 HTTP 代理配置（config.yaml 顶层 proxy 字段）
+
+    TMDB 与 Bangumi 请求共用。未配置返回 None，各 HTTP 库走默认行为
+    （可读 HTTP_PROXY/HTTPS_PROXY 环境变量）。
+
+    Returns:
+        代理地址字符串，未配置时返回 None
+    """
+    if CONFIG_PATH.exists():
+        data = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+        proxy = data.get("proxy")
+        if proxy and str(proxy).strip():
+            logger.info("HTTP 代理来源: 配置文件 %s", CONFIG_PATH)
+            return str(proxy).strip()
+
+    logger.info("HTTP 代理未配置")
+    return None

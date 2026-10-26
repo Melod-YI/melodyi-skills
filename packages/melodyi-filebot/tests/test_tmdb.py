@@ -3,14 +3,18 @@
 from unittest.mock import patch, MagicMock
 
 import pytest
+import requests
 
 from melodyi_filebot import tmdb
 
 
 @pytest.fixture(autouse=True)
 def _set_key(monkeypatch):
-    """所有测试注入 API key"""
+    """所有测试注入 API key，并隔离代理注入（不读真实用户配置）"""
     monkeypatch.setattr(tmdb, "_api_key", "test_key")
+    monkeypatch.setattr(tmdb, "_proxy_applied", False)
+    monkeypatch.setattr(tmdb.config, "load_proxy", lambda: None)
+    monkeypatch.setattr(tmdb.tmdbsimple, "REQUESTS_SESSION", None)
 
 
 class TestSearch:
@@ -237,3 +241,57 @@ class TestSeasonDetail:
         assert d["season_number"] == 1
         assert d["episodes"][0]["name"] == "e1"
         mock_s.info.assert_called_once()
+
+
+class TestApplyProxy:
+    """_apply_proxy 代理注入测试"""
+
+    def test_no_proxy_leaves_session_default(self, monkeypatch):
+        """未配置代理时不碰 REQUESTS_SESSION（保持 tmdbsimple 默认行为）"""
+        monkeypatch.setattr(tmdb.config, "load_proxy", lambda: None)
+        tmdb._apply_proxy()
+        assert tmdb.tmdbsimple.REQUESTS_SESSION is None
+
+    def test_proxy_injects_session(self, monkeypatch):
+        """配置了代理时注入带 proxies 的 requests.Session
+
+        回归保护：session.proxies 须同时映射 http/https，且优先于环境变量代理。
+        """
+        monkeypatch.setattr(
+            tmdb.config, "load_proxy", lambda: "http://127.0.0.1:7890"
+        )
+        tmdb._apply_proxy()
+        session = tmdb.tmdbsimple.REQUESTS_SESSION
+        assert isinstance(session, requests.Session)
+        assert session.proxies == {"http": "http://127.0.0.1:7890",
+                                   "https": "http://127.0.0.1:7890"}
+
+    def test_apply_proxy_is_idempotent(self, monkeypatch):
+        """幂等：多次调用只读一次配置、只注入一次"""
+        calls = []
+
+        def fake_load_proxy():
+            calls.append(1)
+            return "http://127.0.0.1:7890"
+
+        monkeypatch.setattr(tmdb.config, "load_proxy", fake_load_proxy)
+        tmdb._apply_proxy()
+        first_session = tmdb.tmdbsimple.REQUESTS_SESSION
+        tmdb._apply_proxy()
+        assert len(calls) == 1
+        assert tmdb.tmdbsimple.REQUESTS_SESSION is first_session
+
+    def test_ensure_key_triggers_apply_proxy(self, monkeypatch):
+        """wiring 回归：_ensure_key 应触发代理注入（所有 API 方法的单一入口）"""
+        monkeypatch.setattr(tmdb, "_api_key", None)
+        monkeypatch.setattr(tmdb.config, "load_tmdb_api_key", lambda: "k")
+        monkeypatch.setattr(
+            tmdb.config, "load_proxy", lambda: "http://127.0.0.1:7890"
+        )
+        mock_search = MagicMock()
+        mock_search.tv.return_value = {"results": []}
+        with patch("melodyi_filebot.tmdb.tmdbsimple.Search", return_value=mock_search):
+            tmdb.search("x", media_type="tv")
+        session = tmdb.tmdbsimple.REQUESTS_SESSION
+        assert isinstance(session, requests.Session)
+        assert session.proxies["https"] == "http://127.0.0.1:7890"

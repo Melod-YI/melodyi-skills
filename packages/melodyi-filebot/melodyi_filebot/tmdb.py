@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
+import requests
 import tmdbsimple as tmdbsimple
 
 from melodyi_filebot import config
@@ -18,6 +19,30 @@ from melodyi_filebot import summarize
 logger = logging.getLogger(__name__)
 
 _api_key: Optional[str] = None
+# 代理是否已尝试注入（幂等标记，与 _api_key 对称）
+_proxy_applied: bool = False
+
+
+def _apply_proxy() -> None:
+    """按配置给 tmdbsimple 注入带代理的 requests.Session（幂等，仅首次生效）
+
+    tmdbsimple 在每个 API 类实例化时读取模块级 REQUESTS_SESSION；
+    未配置代理时不注入，保持其默认行为（requests.request 逐次调用，
+    可读 HTTP_PROXY/HTTPS_PROXY 环境变量）。
+    """
+    global _proxy_applied
+    if _proxy_applied:
+        return
+    _proxy_applied = True
+    proxy = config.load_proxy()
+    if not proxy:
+        logger.info("TMDB 代理未配置，保持 tmdbsimple 默认行为")
+        return
+    session = requests.Session()
+    # session.proxies 优先级高于环境变量代理（requests merge_setting 语义）
+    session.proxies.update({"http": proxy, "https": proxy})
+    tmdbsimple.REQUESTS_SESSION = session
+    logger.info("TMDB 代理已启用: %s", proxy)
 
 
 def _ensure_key() -> str:
@@ -37,6 +62,8 @@ def _ensure_key() -> str:
             "未配置 TMDB_API_KEY。请设置环境变量或在 ~/.melodyi-skills/melodyi-filebot/config.yaml 中配置 tmdb_api_key。"
         )
     tmdbsimple.API_KEY = _api_key
+    # 顺带注入代理（幂等）：所有 API 方法都经由此入口，单一 wiring 点全覆盖
+    _apply_proxy()
     return _api_key
 
 

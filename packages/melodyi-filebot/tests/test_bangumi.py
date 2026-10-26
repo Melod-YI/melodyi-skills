@@ -4,7 +4,7 @@
 bangumi._client），断言三个原语的解析与请求构造。
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -199,3 +199,33 @@ class TestErrors:
         _set_client(r)
         with pytest.raises(RuntimeError):
             bangumi.get_subject(1)
+
+
+# ---------- 代理配置 ----------
+
+
+class TestProxyClient:
+    """_get_client 代理注入测试"""
+
+    def test_get_client_without_proxy_passes_none(self, monkeypatch):
+        """未配置代理时 httpx.Client 收到 proxy=None（等价于不传）"""
+        monkeypatch.setattr(bangumi.config, "load_proxy", lambda: None)
+        with patch("melodyi_filebot.bangumi.httpx.Client") as mock_client:
+            bangumi._get_client()
+            kwargs = mock_client.call_args.kwargs
+            assert kwargs["proxy"] is None
+            assert kwargs["base_url"] == bangumi.BASE_URL
+            assert kwargs["timeout"] == bangumi.DEFAULT_TIMEOUT
+
+    def test_get_client_with_proxy(self, monkeypatch):
+        """配置了代理时 httpx.Client 收到 proxy 地址
+
+        回归保护：config.yaml 的 proxy 字段必须传到 bangumi 的 httpx.Client。
+        """
+        monkeypatch.setattr(
+            bangumi.config, "load_proxy", lambda: "http://127.0.0.1:7890"
+        )
+        with patch("melodyi_filebot.bangumi.httpx.Client") as mock_client:
+            bangumi._get_client()
+            kwargs = mock_client.call_args.kwargs
+            assert kwargs["proxy"] == "http://127.0.0.1:7890"

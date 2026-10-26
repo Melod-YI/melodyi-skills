@@ -42,6 +42,43 @@ class TestLoadTmdbApiKey:
             assert config.load_tmdb_api_key() is None
 
 
+class TestLoadProxy:
+    """load_proxy 测试"""
+
+    def test_from_config_file(self, tmp_path, monkeypatch):
+        """从配置文件读取代理地址"""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("proxy: http://127.0.0.1:7890\n", encoding="utf-8")
+        monkeypatch.setattr(config, "CONFIG_PATH", cfg)
+        assert config.load_proxy() == "http://127.0.0.1:7890"
+
+    def test_strips_whitespace(self, tmp_path, monkeypatch):
+        """代理地址去除首尾空白"""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text('proxy: "  http://127.0.0.1:7890  "\n', encoding="utf-8")
+        monkeypatch.setattr(config, "CONFIG_PATH", cfg)
+        assert config.load_proxy() == "http://127.0.0.1:7890"
+
+    def test_empty_string_returns_none(self, tmp_path, monkeypatch):
+        """空字符串/纯空白视作未配置"""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text('proxy: "   "\n', encoding="utf-8")
+        monkeypatch.setattr(config, "CONFIG_PATH", cfg)
+        assert config.load_proxy() is None
+
+    def test_missing_key_returns_none(self, tmp_path, monkeypatch):
+        """配置文件无 proxy 字段返回 None"""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("tmdb_api_key: k\n", encoding="utf-8")
+        monkeypatch.setattr(config, "CONFIG_PATH", cfg)
+        assert config.load_proxy() is None
+
+    def test_missing_file_returns_none(self, tmp_path, monkeypatch):
+        """配置文件不存在返回 None"""
+        monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "nope.yaml")
+        assert config.load_proxy() is None
+
+
 class TestConfigDirs:
     """配置/数据目录常量测试"""
 

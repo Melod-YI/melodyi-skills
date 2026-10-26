@@ -14,6 +14,7 @@ from typing import List, Optional
 
 import httpx
 
+from melodyi_filebot import config
 from melodyi_filebot import summarize
 from melodyi_filebot.models import BangumiEpisodeBrief, BangumiSubjectSummary
 
@@ -32,10 +33,16 @@ def _get_client() -> httpx.Client:
     """懒构造模块级 httpx.Client（测试可直接覆盖 bangumi._client 注入 fake）"""
     global _client
     if _client is None:
+        proxy = config.load_proxy()
+        if proxy:
+            logger.info("Bangumi HTTP 代理已启用: %s", proxy)
+        else:
+            logger.info("Bangumi HTTP 代理未配置，使用 httpx 默认行为")
         _client = httpx.Client(
             base_url=BASE_URL,
             headers={"User-Agent": USER_AGENT},
             timeout=DEFAULT_TIMEOUT,
+            proxy=proxy,
         )
     return _client
 
