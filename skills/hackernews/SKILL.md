@@ -114,6 +114,18 @@ Outputs a JSON tree. Each node has only:
 - `text` can be `null` for the story root node
 - Comment `text` contains HTML as returned by HN
 
+## Configuration
+
+Optional HTTP proxy for both scripts' API requests. Set in `~/.melodyi-skills/hackernews/config.json`:
+
+```json
+{
+  "proxy": "http://127.0.0.1:7890"
+}
+```
+
+When configured, all http/https requests from both scripts go through the proxy. When not configured, the scripts use the `requests` library default behavior (which honors `HTTP_PROXY`/`HTTPS_PROXY` environment variables). There is no dedicated environment variable for the proxy.
+
 ## Dependencies
 
 - Python 3.10+
@@ -121,11 +133,11 @@ Outputs a JSON tree. Each node has only:
 
 ## Testing
 
-Run the full test suite from the project root:
+Run the test suite from the repository root:
 
 ```bash
-pip install requests pytest requests-mock
-pytest test_search_hn.py test_fetch_comments.py -v
+pip install requests pytest
+pytest tests/hackernews -v
 ```
 
 ## Example Data

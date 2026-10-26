@@ -16,6 +16,8 @@ import sys
 
 import requests
 
+from hn_config import request_proxies
+
 logger = logging.getLogger("hn_fetch")
 
 API_URL = "http://hn.algolia.com/api/v1/items/{id}"
@@ -155,7 +157,7 @@ def fetch_comments(story_id: int, threshold: int, budget: int) -> dict:
     url = API_URL.format(id=story_id)
     logger.info("Fetching HackerNews item id=%s from %s", story_id, url)
 
-    resp = requests.get(url, timeout=30)
+    resp = requests.get(url, timeout=30, proxies=request_proxies())
     logger.info("Response status: %s", resp.status_code)
 
     if resp.status_code != 200:

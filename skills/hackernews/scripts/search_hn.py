@@ -15,6 +15,8 @@ from urllib.parse import urlparse, quote
 
 import requests
 
+from hn_config import request_proxies
+
 logger = logging.getLogger("hn_search")
 
 ALGOLIA_API_URL = "https://hn.algolia.com/api/v1/search"
@@ -54,7 +56,7 @@ def search_hn(url: str) -> str | None:
     )
     logger.info("Requesting %s", query_url)
 
-    resp = requests.get(query_url, timeout=HTTP_TIMEOUT)
+    resp = requests.get(query_url, timeout=HTTP_TIMEOUT, proxies=request_proxies())
     logger.info("Response status: %s", resp.status_code)
 
     if resp.status_code == 429:
