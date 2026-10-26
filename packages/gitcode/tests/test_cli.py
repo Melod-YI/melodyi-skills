@@ -20,7 +20,7 @@ def _patch_client(monkeypatch, handler):
 
     real_init = cli_mod.GitCodeClient.__init__
 
-    def fake_init(self, token, transport=None):
+    def fake_init(self, token, transport=None, proxy=None):
         real_init(self, token, transport=httpx.MockTransport(handler))
 
     monkeypatch.setattr(cli_mod.GitCodeClient, "__init__", fake_init)
@@ -205,3 +205,57 @@ def test_resolve_command(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert captured["method"] == "PUT"
     assert captured["url"].endswith("/comments/disc-1")
+
+
+# ---------- _build_client 代理 wiring ----------
+
+
+def test_build_client_wires_proxy(tmp_path, monkeypatch):
+    """config.json 配置了 proxy 字段时，_build_client 应把它传给 GitCodeClient
+
+    回归保护：CLI 读配置 → GitCodeClient(proxy=...) → httpx.Client(proxy=...) 链路。
+    """
+    import gitcode.cli as cli_mod
+
+    real_init = cli_mod.GitCodeClient.__init__
+    captured = {}
+
+    def fake_init(self, token, transport=None, proxy=None):
+        captured["proxy"] = proxy
+        real_init(self, token, transport=httpx.MockTransport(
+            lambda req: httpx.Response(200, json={"login": "alice"})
+        ))
+
+    monkeypatch.setattr(cli_mod.GitCodeClient, "__init__", fake_init)
+    cfg = tmp_path / "config.json"
+    cfg.write_text(
+        json.dumps({"gitcode_token": "tok-123", "proxy": "http://127.0.0.1:7890"}),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(cli, ["--config", str(cfg), "user"])
+
+    assert result.exit_code == 0
+    assert captured["proxy"] == "http://127.0.0.1:7890"
+
+
+def test_build_client_without_proxy_passes_none(tmp_path, monkeypatch):
+    """config.json 未配置 proxy 字段时，GitCodeClient 收到 proxy=None"""
+    import gitcode.cli as cli_mod
+
+    real_init = cli_mod.GitCodeClient.__init__
+    captured = {}
+
+    def fake_init(self, token, transport=None, proxy=None):
+        captured["proxy"] = proxy
+        real_init(self, token, transport=httpx.MockTransport(
+            lambda req: httpx.Response(200, json={"login": "alice"})
+        ))
+
+    monkeypatch.setattr(cli_mod.GitCodeClient, "__init__", fake_init)
+    cfg = _write_cfg(tmp_path)
+
+    result = CliRunner().invoke(cli, ["--config", str(cfg), "user"])
+
+    assert result.exit_code == 0
+    assert captured["proxy"] is None

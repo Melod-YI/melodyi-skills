@@ -26,10 +26,14 @@ gitcode user
 token 优先级：环境变量 `GITCODE_TOKEN` > `~/.melodyi-skills/gitcode/config.json` 的 `gitcode_token`。
 CLI 提供 `--config PATH` 指定配置文件路径（不提供 `--token`，避免秘钥落入命令行）。
 
+HTTP 代理（可选）：`~/.melodyi-skills/gitcode/config.json` 顶层 `proxy` 字段
+（如 `http://127.0.0.1:7890`），http/https 请求统一走该代理；未配置走 httpx
+默认行为（`HTTP_PROXY`/`HTTPS_PROXY` 环境变量）。
+
 ## 架构
 
 - `url.py`：`parse_pr_url()` 从 PR URL 解析 owner/repo/number
-- `config.py`：`load_token()` 读取 token（env > config）
+- `config.py`：`load_token()` 读取 token（env > config）；`load_proxy()` 读取代理（仅 config）
 - `api.py`：`GitCodeClient(httpx)` 封装端点，token 经 `Authorization: Bearer` 头发送；
   `APIError` 承载 4xx/5xx 与网络错误
 - `cli.py`：click 命令组，6 个子命令；stdout 输出 JSON，stderr 日志；

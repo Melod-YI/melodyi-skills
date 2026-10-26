@@ -12,6 +12,7 @@ description: GitCode 用户贡献采集工具。当用户想统计某用户在�
 
 - 已安装 `gitcode` CLI（`pip install -e packages/gitcode`）
 - token 已配置：环境变量 `GITCODE_TOKEN`，或 `~/.melodyi-skills/gitcode/config.json` 的 `gitcode_token`
+- 代理（可选）：`~/.melodyi-skills/gitcode/config.json` 顶层 `proxy` 字段（如 `http://127.0.0.1:7890`）
 - 验证：`gitcode user` 能返回当前用户即正常
 
 ## CLI 速查（本 skill 用到的）

@@ -31,13 +31,24 @@ class GitCodeClient:
     Args:
         token: GitCode 个人访问令牌
         transport: 可选 httpx transport，测试时注入 MockTransport
+        proxy: 可选 HTTP 代理地址（如 http://127.0.0.1:7890），
+            http/https 请求统一走该代理；None 走 httpx 默认行为
     """
 
-    def __init__(self, token: str, transport: Optional[httpx.BaseTransport] = None):
+    def __init__(
+        self,
+        token: str,
+        transport: Optional[httpx.BaseTransport] = None,
+        proxy: Optional[str] = None,
+    ):
         self._token = token
+        if proxy:
+            logger.info("GitCodeClient 启用代理: %s", proxy)
+        else:
+            logger.info("GitCodeClient 未配置代理，使用 httpx 默认行为")
         # 不设 base_url：httpx 的 base_url+绝对路径(/user)会按 RFC3986 替换掉 /api/v5，
         # 故在 _request 里手动拼完整 URL，避免路径丢失。
-        self._client = httpx.Client(transport=transport, timeout=30.0)
+        self._client = httpx.Client(transport=transport, proxy=proxy, timeout=30.0)
 
     def _request(
         self,

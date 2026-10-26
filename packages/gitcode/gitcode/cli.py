@@ -17,7 +17,7 @@ from pathlib import Path
 import click
 
 from gitcode.api import APIError, GitCodeClient
-from gitcode.config import load_token
+from gitcode.config import load_proxy, load_token
 from gitcode.url import UrlParseError, parse_pr_url, parse_repo_url
 
 logger = logging.getLogger(__name__)
@@ -61,12 +61,17 @@ def cli(ctx, config_path, verbose):
 
 
 def _build_client(ctx) -> GitCodeClient:
-    """读取 token 并构造客户端；token 缺失则退出码 2"""
+    """读取 token 与代理配置并构造客户端；token 缺失则退出码 2"""
     token = load_token(ctx.obj.get("config_path"))
     if not token:
         _fail("未配置 token：请设置环境变量 GITCODE_TOKEN 或在 "
               "~/.melodyi-skills/gitcode/config.json 填写 gitcode_token", 2)
-    return GitCodeClient(token)
+    proxy = load_proxy(ctx.obj.get("config_path"))
+    if proxy:
+        logger.info("HTTP 代理已启用: %s", proxy)
+    else:
+        logger.info("HTTP 代理未配置，使用默认行为")
+    return GitCodeClient(token, proxy=proxy)
 
 
 def _ref(url: str):

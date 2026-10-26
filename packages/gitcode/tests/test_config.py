@@ -1,8 +1,8 @@
-"""load_token 单元测试：优先级 env > config 文件"""
+"""load_token / load_proxy 单元测试：优先级 env > config 文件（proxy 仅 config 文件）"""
 
 import json
 
-from gitcode.config import load_token
+from gitcode.config import load_proxy, load_token
 
 
 def test_env_takes_priority(monkeypatch, tmp_path):
@@ -59,3 +59,49 @@ def test_non_dict_json_returns_none(monkeypatch, tmp_path):
     cfg = tmp_path / "config.json"
     cfg.write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
     assert load_token(cfg) is None
+
+
+# ---------- load_proxy ----------
+
+
+def test_load_proxy_from_config_file(tmp_path):
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"proxy": "http://127.0.0.1:7890"}), encoding="utf-8")
+    assert load_proxy(cfg) == "http://127.0.0.1:7890"
+
+
+def test_load_proxy_strips_whitespace(tmp_path):
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"proxy": "  http://127.0.0.1:7890  "}), encoding="utf-8")
+    assert load_proxy(cfg) == "http://127.0.0.1:7890"
+
+
+def test_load_proxy_empty_string_returns_none(tmp_path):
+    """空字符串/纯空白视作未配置"""
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"proxy": "   "}), encoding="utf-8")
+    assert load_proxy(cfg) is None
+
+
+def test_load_proxy_missing_key_returns_none(tmp_path):
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"gitcode_token": "tok"}), encoding="utf-8")
+    assert load_proxy(cfg) is None
+
+
+def test_load_proxy_missing_file_returns_none(tmp_path):
+    assert load_proxy(tmp_path / "nope.json") is None
+
+
+def test_load_proxy_corrupt_json_returns_none(tmp_path):
+    """配置文件 JSON 损坏时返回 None，不抛异常"""
+    cfg = tmp_path / "config.json"
+    cfg.write_text("{not valid json", encoding="utf-8")
+    assert load_proxy(cfg) is None
+
+
+def test_load_proxy_non_dict_returns_none(tmp_path):
+    """配置文件内容非对象（如数组）时返回 None"""
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+    assert load_proxy(cfg) is None

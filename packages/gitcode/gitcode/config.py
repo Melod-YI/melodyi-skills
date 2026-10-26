@@ -46,3 +46,29 @@ def load_token(config_path: Optional[Path] = None) -> Optional[str]:
 
     logger.info("token 未配置")
     return None
+
+
+def load_proxy(config_path: Optional[Path] = None) -> Optional[str]:
+    """读取 HTTP 代理配置
+
+    读取配置文件（config_path 或默认 CONFIG_PATH）顶层 ``proxy`` 字段，
+    http/https 请求统一走该代理。不设专用环境变量；未配置返回 None，
+    httpx 走默认行为（可读 HTTP_PROXY/HTTPS_PROXY 环境变量）。
+
+    Returns:
+        代理地址字符串，未配置时返回 None
+    """
+    path = Path(config_path) if config_path else CONFIG_PATH
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("配置文件 %s 解析失败: %s", path, e)
+            return None
+        proxy = data.get("proxy") if isinstance(data, dict) else None
+        if proxy and str(proxy).strip():
+            logger.info("proxy 来源: 配置文件 %s", path)
+            return str(proxy).strip()
+
+    logger.info("proxy 未配置")
+    return None

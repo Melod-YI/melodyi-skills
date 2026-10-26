@@ -5,7 +5,7 @@ description = "GitCode PR 代码检视 CLI：封装 GitCode API 调用与 token 
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.0",
-    "httpx>=0.25",
+    "httpx>=0.26",
 ]
 
 [project.optional-dependencies]

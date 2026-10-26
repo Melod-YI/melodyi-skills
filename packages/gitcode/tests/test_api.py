@@ -1,5 +1,7 @@
 """GitCodeClient 单元测试：用 httpx.MockTransport 注入假响应，验证请求构造与响应解析"""
 
+from unittest.mock import patch
+
 import httpx
 import pytest
 
@@ -245,3 +247,27 @@ def test_resolve_comment_false():
     client.resolve_comment("owner", "repo", "123", "disc-1", resolved=False)
     import json as _json
     assert _json.loads(captured["body"]) == {"resolved": False}
+
+
+# ---------- proxy 参数 ----------
+
+
+def test_client_default_no_proxy():
+    """未配置代理时 httpx.Client 收到 proxy=None（等价于不传）"""
+    with patch("gitcode.api.httpx.Client") as mock_client:
+        GitCodeClient("tok-123")
+        mock_client.assert_called_once()
+        kwargs = mock_client.call_args.kwargs
+        assert kwargs["proxy"] is None
+        assert kwargs["timeout"] == 30.0
+
+
+def test_client_with_proxy():
+    """配置代理时 httpx.Client 收到 proxy 地址
+
+    回归保护：CLI 读取 config.json 的 proxy 字段后必须传到 httpx.Client。
+    """
+    with patch("gitcode.api.httpx.Client") as mock_client:
+        GitCodeClient("tok-123", proxy="http://127.0.0.1:7890")
+        kwargs = mock_client.call_args.kwargs
+        assert kwargs["proxy"] == "http://127.0.0.1:7890"
