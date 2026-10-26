@@ -111,6 +111,7 @@ CLAUDE_CODE_GIT_BASH_PATH="C:\Applications\Scoop\apps\git\current\bin\bash.exe" 
 - **默认值必须用绝对路径**：Pydantic 配置模型（schema）里所有路径字段的默认值必须基于 `Path.home()` 拼出绝对路径，**禁止用相对路径**（如 `./data/compare.db`、`./logs`）。相对默认会在"配置文件缺该字段"时把数据/日志写到当前工作目录（CWD），污染仓库或运行目录。内置默认加载器（`_get_builtin_default_config` 等）同样指向用户目录绝对路径。
 - **`config init` 模板**：生成的 `config.yaml` 模板里路径用 `${HOME}/.melodyi-skills/<skill-name>/...` 形式，与默认值一致。
 - **运行时产物不入库**：数据库、日志等运行时生成的文件不提交进仓库，对应目录写入 `.gitignore`（如 `packages/<pkg>/data/`）。
+- **HTTP 代理约定**：涉及外部网络调用的 skill 统一支持在各自配置文件配置 `proxy` 字段（melodyi-web 为 `http.proxy`，其余为顶层 `proxy`），形如 `http://127.0.0.1:7890`，http/https 全走该代理；未配置时不改变各 HTTP 库默认行为（仍可读 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量兜底），显式配置的代理优先于环境变量代理。不设 skill 专用代理环境变量。
 
 > 反例（已修复）：melodyi-web 曾在 `config_schema.py` 用相对默认 `./data/compare.db`、`./logs`，导致比对模式 db 和日志落到包目录下；同时用户 `config.yaml` 里曾误写 `${HOME}/.melodyi-web/...`（少了 `melodyi-skills/` 段）。新增/修改路径字段时务必对照本约定。
 

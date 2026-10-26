@@ -39,6 +39,14 @@ curl -L -o .arxiv_papers/<paper_id>/source.tar.gz "https://arxiv.org/src/<paper_
 tar -xzf .arxiv_papers/<paper_id>/source.tar.gz -C .arxiv_papers/<paper_id>/source
 ```
 
+If direct access to arxiv.org is unavailable, pass the local proxy to curl:
+
+```bash
+curl -L --proxy http://127.0.0.1:7890 -o .arxiv_papers/<paper_id>/source.tar.gz "https://arxiv.org/src/<paper_id>"
+```
+
+curl also honors the `http_proxy`/`https_proxy` environment variables by default; an explicit `--proxy` flag takes precedence over them.
+
 ### Step 2: Locate Main File
 
 List the extracted files to find the main TeX file:
