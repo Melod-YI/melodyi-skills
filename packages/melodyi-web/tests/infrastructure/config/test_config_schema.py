@@ -75,6 +75,25 @@ class TestConfig:
         config = Config(**{"http": {"verify_ssl": False}})
         assert config.http.verify_ssl is False
 
+    def test_http_config_default_proxy_none(self):
+        """测试 HttpConfig 默认不配置代理"""
+        http = HttpConfig()
+        assert http.proxy is None
+
+    def test_http_config_proxy_from_dict(self):
+        """测试从字典加载代理配置"""
+        config = Config(**{"http": {"proxy": "http://127.0.0.1:7890"}})
+        assert config.http.proxy == "http://127.0.0.1:7890"
+
+    def test_http_config_empty_proxy_normalized(self):
+        """测试空字符串/纯空白代理归一为 None（避免空串传给 httpx）"""
+        assert HttpConfig(proxy="").proxy is None
+        assert HttpConfig(proxy="   ").proxy is None
+
+    def test_http_config_proxy_stripped(self):
+        """测试代理地址去除首尾空白"""
+        assert HttpConfig(proxy="  http://127.0.0.1:7890  ").proxy == "http://127.0.0.1:7890"
+
     def test_providers_order_preserved(self):
         """测试供应商顺序保留"""
         config_dict = {

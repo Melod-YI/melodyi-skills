@@ -1,5 +1,7 @@
 """HTTP 客户端测试"""
 
+from unittest.mock import patch
+
 import pytest
 from melodyi_web.infrastructure.http.http_client import HttpClient
 
@@ -61,3 +63,55 @@ class TestHttpClient:
             assert client_explicit.verify_ssl is True
         finally:
             HttpClient.set_default_verify_ssl(original)
+
+
+class TestHttpClientProxy:
+    """HttpClient 代理配置测试"""
+
+    def test_default_proxy_is_none(self):
+        """测试默认不配置代理（走 httpx 默认行为）"""
+        client = HttpClient(timeout_ms=5000)
+        assert client.proxy is None
+
+    def test_explicit_proxy(self):
+        """测试显式传入代理地址"""
+        client = HttpClient(timeout_ms=5000, proxy="http://127.0.0.1:7890")
+        assert client.proxy == "http://127.0.0.1:7890"
+
+    def test_set_default_proxy(self):
+        """测试类级默认代理覆盖：未显式传参时继承类级默认值
+
+        回归保护：CLI 加载配置后调用 set_default_proxy，
+        后续各 provider 实例化的 HttpClient 必须继承该全局设置。
+        """
+        original = HttpClient._default_proxy
+        try:
+            HttpClient.set_default_proxy("http://10.0.0.1:8080")
+            client = HttpClient(timeout_ms=5000)
+            assert client.proxy == "http://10.0.0.1:8080"
+            # 显式传参优先于类级默认
+            client_explicit = HttpClient(timeout_ms=5000, proxy="http://127.0.0.1:7890")
+            assert client_explicit.proxy == "http://127.0.0.1:7890"
+        finally:
+            HttpClient.set_default_proxy(original)
+
+    def test_get_client_passes_proxy_to_httpx(self):
+        """测试 _get_client 把代理地址传给 httpx.Client
+
+        回归保护：配置了代理时 httpx.Client 构造必须带 proxy 参数。
+        """
+        with patch("melodyi_web.infrastructure.http.http_client.httpx.Client") as mock_client:
+            client = HttpClient(timeout_ms=5000, verify_ssl=True, proxy="http://127.0.0.1:7890")
+            client._get_client()
+            mock_client.assert_called_once()
+            kwargs = mock_client.call_args.kwargs
+            assert kwargs["proxy"] == "http://127.0.0.1:7890"
+            assert kwargs["verify"] is True
+
+    def test_get_client_without_proxy_passes_none(self):
+        """测试未配置代理时 httpx.Client 收到 proxy=None（等价于不传）"""
+        with patch("melodyi_web.infrastructure.http.http_client.httpx.Client") as mock_client:
+            client = HttpClient(timeout_ms=5000)
+            client._get_client()
+            kwargs = mock_client.call_args.kwargs
+            assert kwargs["proxy"] is None

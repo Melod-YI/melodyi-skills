@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock
 from melodyi_web.application.cli import cli, main
 from melodyi_web.domain.models.search_result import UnifiedSearchResult, SearchResultItem, SearchError
 from melodyi_web.domain.models.provider_config import ProviderConfig
-from melodyi_web.infrastructure.config.config_schema import Config, ModeConfig, FallbackConfig
+from melodyi_web.infrastructure.config.config_schema import Config, ModeConfig, FallbackConfig, HttpConfig
 
 
 class TestCliHelp:
@@ -781,3 +781,89 @@ class TestCliIntegration:
         params = {p.name for p in show_cmd.params}
         assert "config_path" in params
         assert "output" in params
+
+class TestHttpProxyInjection:
+    """http.proxy 配置注入 HttpClient 类级默认的测试"""
+
+    @patch("melodyi_web.application.cli.HttpClient")
+    @patch("melodyi_web.application.cli.ProviderFactory")
+    @patch("melodyi_web.application.cli.ParameterAdapter")
+    @patch("melodyi_web.application.cli.ExecutionStrategy")
+    @patch("melodyi_web.application.cli.load_config")
+    def test_search_applies_http_proxy(
+        self,
+        mock_load_config,
+        mock_strategy_class,
+        mock_adapter_class,
+        mock_factory_class,
+        mock_http_client,
+    ):
+        """search 命令应把 http.proxy 配置注入 HttpClient 类级默认
+
+        回归保护：配置了代理后，后续各 provider 实例化的 HttpClient 必须继承该代理。
+        """
+        mock_config = Config(
+            providers=[ProviderConfig(name="tavily", api_key="test-key")],
+            mode=ModeConfig(),
+            fallback=FallbackConfig(),
+            http=HttpConfig(proxy="http://127.0.0.1:7890"),
+        )
+        mock_load_config.return_value = mock_config
+
+        mock_provider = MagicMock()
+        mock_provider.name = "tavily"
+        mock_factory_class.create_all.return_value = [mock_provider]
+        mock_adapter_class.adapt.return_value = MagicMock()
+        mock_strategy = MagicMock()
+        mock_strategy.execute_normal.return_value = UnifiedSearchResult(
+            provider="tavily", response_time_ms=100, results=[]
+        )
+        mock_strategy_class.return_value = mock_strategy
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["search", "test query"])
+
+        assert result.exit_code == 0
+        mock_http_client.set_default_proxy.assert_called_once_with(
+            "http://127.0.0.1:7890"
+        )
+        # verify_ssl 注入行为保持不变
+        mock_http_client.set_default_verify_ssl.assert_called_once_with(True)
+
+    @patch("melodyi_web.application.cli.HttpClient")
+    @patch("melodyi_web.application.cli.FetchExecutionStrategy")
+    @patch("melodyi_web.application.cli.FetchProviderFactory")
+    @patch("melodyi_web.application.cli.load_config")
+    def test_fetch_applies_http_proxy(
+        self,
+        mock_load_config,
+        mock_factory_class,
+        mock_strategy_class,
+        mock_http_client,
+    ):
+        """fetch 命令应把 http.proxy 配置注入 HttpClient 类级默认"""
+        mock_config = Config(
+            mode=ModeConfig(),
+            fallback=FallbackConfig(),
+            http=HttpConfig(proxy="http://127.0.0.1:7890"),
+        )
+        mock_load_config.return_value = mock_config
+
+        mock_factory_class.create_all.return_value = []
+        mock_result = MagicMock()
+        mock_result.error = None
+        mock_result.provider = "jina"
+        mock_result.response_time_ms = 100
+        mock_result.title = "Test"
+        mock_result.content = "content"
+        mock_strategy = MagicMock()
+        mock_strategy.execute_normal.return_value = mock_result
+        mock_strategy_class.return_value = mock_strategy
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["fetch", "https://example.com"])
+
+        assert result.exit_code == 0
+        mock_http_client.set_default_proxy.assert_called_once_with(
+            "http://127.0.0.1:7890"
+        )

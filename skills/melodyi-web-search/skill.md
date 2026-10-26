@@ -116,3 +116,5 @@ melodyi-web config init
 ```
 
 然后用 `melodyi-web config show` 查看当前配置状态。
+
+如需走代理，在 `config.yaml` 的 `http.proxy` 配置（如 `http://127.0.0.1:7890`），所有提供商的 http/https 请求统一走该代理；未配置时走默认行为（可读 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量）。

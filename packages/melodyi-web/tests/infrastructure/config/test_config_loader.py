@@ -147,6 +147,31 @@ http:
 
         assert config.http.verify_ssl is False
 
+    def test_load_default_config_proxy_none(self, monkeypatch, tmp_path):
+        """内置默认配置应不含代理（proxy=None，走 httpx 默认行为）。"""
+        monkeypatch.setattr(
+            "melodyi_web.infrastructure.config.config_loader.USER_CONFIG_FILE",
+            tmp_path / "nonexistent.yaml",
+        )
+        config = load_config()
+        assert config.http.proxy is None
+
+    def test_load_yaml_config_proxy(self):
+        """测试从 yaml 加载 http.proxy 代理配置"""
+        yaml_content = """
+http:
+  proxy: http://127.0.0.1:7890
+"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            f.write(yaml_content)
+            temp_path = f.name
+        try:
+            config = load_config(temp_path)
+        finally:
+            os.unlink(temp_path)
+
+        assert config.http.proxy == "http://127.0.0.1:7890"
+
 
 class TestDatabaseConfigDefault:
     """DatabaseConfig 默认路径测试"""

@@ -119,6 +119,9 @@ def search(
         # 应用全局 SSL 校验开关：默认校验，配置关闭时所有 provider 共享关闭
         HttpClient.set_default_verify_ssl(config.http.verify_ssl)
 
+        # 应用全局 HTTP 代理：配置后所有 provider 的 http/https 请求统一走该代理
+        HttpClient.set_default_proxy(config.http.proxy)
+
         # 2. 构建统一搜索请求
         time_range_obj = None
         if time_range:
@@ -255,6 +258,9 @@ def fetch(
 
         # 应用全局 SSL 校验开关：默认校验，配置关闭时所有 provider 共享关闭
         HttpClient.set_default_verify_ssl(config.http.verify_ssl)
+
+        # 应用全局 HTTP 代理：配置后所有 provider 的 http/https 请求统一走该代理
+        HttpClient.set_default_proxy(config.http.proxy)
 
         # 2. 构建抓取请求
         fetch_request = FetchRequest(url=url, preferred_provider=provider)
@@ -450,6 +456,10 @@ http:
   # 是否校验 SSL 证书（默认校验）
   # 仅在内网自签名证书、自托管服务（SearXNG/Firecrawl）等场景下设为 false
   verify_ssl: true
+  # HTTP 代理地址（可选），例如 http://127.0.0.1:7890
+  # 配置后所有供应商的 http/https 请求统一走该代理；
+  # 未配置时走默认行为（可读 HTTP_PROXY/HTTPS_PROXY 环境变量）
+  # proxy: http://127.0.0.1:7890
 
 # ====================
 # 数据库配置
@@ -552,6 +562,7 @@ def config_show(config_path: Optional[str], output: str):
 
             click.echo(f"\nHTTP 配置:")
             click.echo(f"  verify_ssl: {config.http.verify_ssl}")
+            click.echo(f"  proxy: {config.http.proxy or '(未设置)'}")
 
     except FileNotFoundError as e:
         click.echo(f"错误: {e}", err=True)

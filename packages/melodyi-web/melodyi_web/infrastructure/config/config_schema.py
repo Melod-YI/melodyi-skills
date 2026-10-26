@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from typing import List, Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from melodyi_web.domain.models.provider_config import ProviderConfig
 from melodyi_web.domain.models.fetch_provider_config import FetchProviderConfig
 
@@ -48,6 +48,19 @@ class HttpConfig(BaseModel):
     # 默认校验 SSL：保证 HTTPS 请求的证书合法性。
     # 仅在内网自签名证书、自托管服务（如 SearXNG/Firecrawl）等场景下显式关闭。
     verify_ssl: bool = Field(default=True, description="是否校验 SSL 证书（默认校验，可关闭以兼容自签名证书）")
+
+    # HTTP 代理地址（如 http://127.0.0.1:7890），配置后 http/https 请求统一走该代理；
+    # 未设置时保持 httpx 默认行为（仍可读 HTTP_PROXY/HTTPS_PROXY 环境变量）
+    proxy: Optional[str] = Field(default=None, description="HTTP 代理地址，未设置时走默认行为")
+
+    @field_validator("proxy")
+    @classmethod
+    def _normalize_proxy(cls, v: Optional[str]) -> Optional[str]:
+        """strip 并把空字符串归一为 None，避免空串被当成显式代理传给 httpx"""
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
 
 
 class Config(BaseModel):
